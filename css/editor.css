@@ -276,6 +276,27 @@ input, select, textarea { font-family: inherit; color: inherit; }
 .editor.preview-mode .right-sidebar,
 .editor.preview-mode .selection-overlay { display: none; }
 .editor.preview-mode .workspace { grid-template-columns: 1fr; }
+.editor.preview-mode .toolbar { opacity: 0.15; transition: opacity 0.15s; }
+.editor.preview-mode .toolbar:hover { opacity: 1; }
+
+.exit-preview-btn {
+  position: fixed;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 8px 16px;
+  background: var(--accent);
+  color: white;
+  border: none;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+  z-index: 9998;
+  transition: transform 0.15s;
+}
+.exit-preview-btn:hover { transform: translateX(-50%) scale(1.05); }
 
 /* ---------- Sidebars ---------- */
 .sidebar {

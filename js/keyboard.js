@@ -50,8 +50,9 @@ window.Keyboard = (function() {
       window.Canvas.deleteSelected();
       return;
     }
-    // Escape: deselect
+    // Escape: exit preview if active, otherwise deselect
     if (e.key === 'Escape') {
+      if (window.__heExitPreview && window.__heExitPreview()) return;
       ES.deselect();
       return;
     }

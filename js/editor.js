@@ -84,12 +84,16 @@
       });
     });
 
-    document.getElementById('tb-preview').addEventListener('click', () => {
-      isPreview = !isPreview;
+    const setPreview = (on) => {
+      isPreview = on;
       document.getElementById('editor').classList.toggle('preview-mode', isPreview);
       document.getElementById('tb-preview').classList.toggle('active', isPreview);
+      document.getElementById('exit-preview-btn').hidden = !isPreview;
       window.Canvas.setPreview(isPreview);
-    });
+    };
+    document.getElementById('tb-preview').addEventListener('click', () => setPreview(!isPreview));
+    document.getElementById('exit-preview-btn').addEventListener('click', () => setPreview(false));
+    window.__heExitPreview = () => { if (isPreview) { setPreview(false); return true; } return false; };
 
     document.getElementById('tb-open').addEventListener('click', async () => {
       await window.FileOps.openLocalFile();
