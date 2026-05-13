@@ -76,7 +76,8 @@
         <button class="tool-btn icon-only device-btn" data-device="mobile" title="Mobile"><i data-lucide="smartphone"></i></button>
       </div>
       <span class="divider"></span>
-      <button class="tool-btn icon-only anim-blink" id="tb-preview" title="Toggle preview mode (P)"><i data-lucide="eye"></i></button>
+      <button class="tool-btn icon-only anim-blink" id="tb-preview" title="Toggle preview mode (P) — hides editor chrome. Scripts don't run inside the editor; use the external preview button for that."><i data-lucide="eye"></i></button>
+      <button class="tool-btn icon-only anim-press" id="tb-external-preview" title="Open current document in a new tab (scripts run)"><i data-lucide="external-link"></i></button>
     </div>
 
     <div class="toolbar-right">
@@ -131,7 +132,7 @@
     <!-- Canvas -->
     <section class="canvas-wrap">
       <div class="canvas-frame" data-device="desktop">
-        <iframe id="canvas" sandbox="allow-same-origin allow-scripts allow-forms" title="Canvas"></iframe>
+        <iframe id="canvas" sandbox="allow-same-origin allow-forms" title="Canvas"></iframe>
         <div class="selection-overlay" id="selection-overlay" hidden>
           <div class="sel-box" id="sel-box"></div>
           <div class="sel-label" id="sel-label"></div>

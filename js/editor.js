@@ -104,6 +104,19 @@
     document.getElementById('exit-preview-btn').addEventListener('click', () => setPreview(false));
     window.__heExitPreview = () => { if (isPreview) { setPreview(false); return true; } return false; };
 
+    document.getElementById('tb-external-preview').addEventListener('click', () => {
+      const doc = ES.state.doc;
+      if (!doc) return;
+      const html = '<!DOCTYPE html>\n' + doc.documentElement.outerHTML
+        .replace(/<style id="__he_styles__">[\s\S]*?<\/style>/g, '')
+        .replace(/\s+contenteditable="[^"]*"/g, '')
+        .replace(/\s+data-he-editing="[^"]*"/g, '');
+      const blob = new Blob([html], { type: 'text/html' });
+      const url = URL.createObjectURL(blob);
+      window.open(url, '_blank');
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+    });
+
     document.getElementById('tb-open').addEventListener('click', async () => {
       await window.FileOps.openLocalFile();
     });
