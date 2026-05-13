@@ -271,11 +271,14 @@ h1 { font-size: 32px; }
     if (document.visibilityState === 'visible') checkExternalChanges();
   });
 
-  // Keep the refresh button enabled state in sync with whether we have a handle
+  // Keep refresh / diff button enabled state in sync with whether we have a handle
   ES.on((evt) => {
     if (evt === 'file-changed') {
-      const btn = document.getElementById('tb-refresh');
-      if (btn) btn.disabled = !ES.state.fileHandle;
+      const hasHandle = !!ES.state.fileHandle;
+      ['tb-refresh', 'tb-diff', 'tb-git-diff'].forEach(id => {
+        const btn = document.getElementById(id);
+        if (btn) btn.disabled = !hasHandle;
+      });
     }
   });
 
