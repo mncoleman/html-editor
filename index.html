@@ -41,6 +41,10 @@
       Your browser doesn't support live local file editing (Safari/Firefox). Import/Export still works.
     </div>
   </div>
+  <a id="empty-version-chip" class="version-chip empty-version-chip" href="#" target="_blank" rel="noopener" title="View this commit on GitHub" hidden>
+    <i data-lucide="git-commit-horizontal"></i>
+    <span class="version-text">—</span>
+  </a>
 </div>
 
 <!-- Main editor UI -->
@@ -184,6 +188,10 @@
 
   <!-- Status bar -->
   <footer class="statusbar">
+    <a id="version-chip" class="version-chip" href="#" target="_blank" rel="noopener" title="View this commit on GitHub" hidden>
+      <i data-lucide="git-commit-horizontal"></i>
+      <span class="version-text">—</span>
+    </a>
     <span id="status-breadcrumbs" class="breadcrumbs"></span>
     <span class="status-right">
       <span id="status-message"></span>
@@ -214,6 +222,7 @@
 <script src="js/file.js"></script>
 <script src="js/keyboard.js"></script>
 <script src="js/editor.js"></script>
+<script src="js/version.js"></script>
 
 </body>
 </html>
