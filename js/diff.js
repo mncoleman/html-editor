@@ -43,10 +43,15 @@ window.DiffViewer = (function() {
     await renderModal(diskText, editorText, 'on disk', 'editor');
   }
 
+  // How many lines of context to show on each side of a change when
+  // unchanged regions are collapsed.
+  const CONTEXT_LINES = 3;
+
   async function renderModal(oldText, newText, oldLabel, newLabel, opts) {
     opts = opts || {};
     const lib = await ensureLib();
     const changes = lib.diffLines(oldText, newText);
+    let collapsed = true; // default: hide unchanged regions
 
     const oldLines = oldText.split('\n');
     const newLines = newText.split('\n');
@@ -76,6 +81,8 @@ window.DiffViewer = (function() {
             <button class="diff-mode-btn active" data-view="unified" title="Unified view"><i data-lucide="rows-3"></i></button>
             <button class="diff-mode-btn" data-view="split" title="Side-by-side view"><i data-lucide="columns-2"></i></button>
             <span class="diff-spacer"></span>
+            <button class="diff-mode-btn diff-collapse-toggle active" id="diff-collapse-toggle" title="Show only changed regions (with ${CONTEXT_LINES} lines of context)"><i data-lucide="unfold-vertical"></i><span>Collapse</span></button>
+            <span class="diff-spacer"></span>
             <button class="diff-action-btn" id="diff-copy" title="Copy diff to clipboard"><i data-lucide="copy"></i></button>
             ${opts.hideApplyButtons ? '' : `
             <button class="diff-action-btn" id="diff-apply-disk" title="Discard editor changes — load disk version"><i data-lucide="download"></i><span>Use disk</span></button>
@@ -89,19 +96,35 @@ window.DiffViewer = (function() {
     document.body.appendChild(modal);
 
     const body = modal.querySelector('.diff-body');
-    renderUnified(body, changes);
 
-    // View toggle
-    modal.querySelectorAll('.diff-mode-btn').forEach(btn => {
+    let currentView = 'unified';
+    function rerender() {
+      body.innerHTML = '';
+      const segments = collapsed ? segmentChanges(changes, CONTEXT_LINES) : null;
+      if (currentView === 'unified') renderUnified(body, changes, segments);
+      else renderSplit(body, oldLines, newLines, changes, segments);
+    }
+    rerender();
+
+    // View toggle (unified / split)
+    modal.querySelectorAll('.diff-mode-btn[data-view]').forEach(btn => {
       btn.addEventListener('click', () => {
-        modal.querySelectorAll('.diff-mode-btn').forEach(b => b.classList.remove('active'));
+        modal.querySelectorAll('.diff-mode-btn[data-view]').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
-        const view = btn.dataset.view;
-        body.dataset.view = view;
-        body.innerHTML = '';
-        if (view === 'unified') renderUnified(body, changes);
-        else renderSplit(body, oldLines, newLines, changes);
+        currentView = btn.dataset.view;
+        body.dataset.view = currentView;
+        rerender();
       });
+    });
+
+    // Collapse / expand-all toggle
+    const collapseBtn = modal.querySelector('#diff-collapse-toggle');
+    collapseBtn.addEventListener('click', () => {
+      collapsed = !collapsed;
+      collapseBtn.classList.toggle('active', collapsed);
+      collapseBtn.title = collapsed ? 'Click to show every line' : `Click to hide unchanged regions (${CONTEXT_LINES} lines of context)`;
+      collapseBtn.querySelector('span').textContent = collapsed ? 'Collapse' : 'Expand all';
+      rerender();
     });
 
     // Copy diff text
@@ -141,74 +164,155 @@ window.DiffViewer = (function() {
     if (window.renderIcons) window.renderIcons();
   }
 
-  function renderUnified(host, changes) {
+  // Flatten changes into a per-line list. Returns:
+  //   [{ kind: 'added'|'removed'|'context', line, oldNo, newNo }, ...]
+  function flatten(changes) {
+    const out = [];
     let oldNo = 0, newNo = 0;
     changes.forEach(c => {
       const lines = c.value.split('\n');
-      // Last token is often empty when value ended with \n — drop it
       if (lines[lines.length - 1] === '') lines.pop();
-      lines.forEach((line) => {
-        const cls = c.added ? 'added' : c.removed ? 'removed' : 'context';
-        const sigil = c.added ? '+' : c.removed ? '-' : ' ';
+      const kind = c.added ? 'added' : c.removed ? 'removed' : 'context';
+      lines.forEach(line => {
         if (c.removed) oldNo++;
         else if (c.added) newNo++;
         else { oldNo++; newNo++; }
-        const lineEl = document.createElement('div');
-        lineEl.className = 'diff-line ' + cls;
-        lineEl.innerHTML = `
-          <span class="diff-num diff-num-old">${c.added ? '' : oldNo}</span>
-          <span class="diff-num diff-num-new">${c.removed ? '' : newNo}</span>
-          <span class="diff-sigil">${sigil}</span>
-          <span class="diff-content"></span>
-        `;
-        lineEl.querySelector('.diff-content').textContent = line;
-        host.appendChild(lineEl);
+        out.push({
+          kind,
+          line,
+          oldNo: c.added ? null : oldNo,
+          newNo: c.removed ? null : newNo,
+        });
       });
     });
+    return out;
   }
 
-  // Side-by-side: align unchanged spans, stagger add/remove
-  function renderSplit(host, oldLines, newLines, changes) {
+  // Split the flattened lines into visible runs and collapsed gaps.
+  // Visible = a change OR within CONTEXT_LINES of a change.
+  // Gap = a run of pure-context lines with no change nearby.
+  function segmentChanges(changes, contextLines) {
+    const lines = flatten(changes);
+    const keep = new Array(lines.length).fill(false);
+    lines.forEach((l, i) => {
+      if (l.kind !== 'context') {
+        const lo = Math.max(0, i - contextLines);
+        const hi = Math.min(lines.length - 1, i + contextLines);
+        for (let j = lo; j <= hi; j++) keep[j] = true;
+      }
+    });
+    const segments = [];
+    let i = 0;
+    while (i < lines.length) {
+      const v = keep[i];
+      const start = i;
+      while (i < lines.length && keep[i] === v) i++;
+      segments.push({ type: v ? 'visible' : 'gap', lines: lines.slice(start, i) });
+    }
+    return segments;
+  }
+
+  // Render a single flat line into the unified body.
+  function mkUnifiedLine(l) {
+    const sigil = l.kind === 'added' ? '+' : l.kind === 'removed' ? '-' : ' ';
+    const lineEl = document.createElement('div');
+    lineEl.className = 'diff-line ' + l.kind;
+    lineEl.innerHTML = `
+      <span class="diff-num diff-num-old">${l.oldNo == null ? '' : l.oldNo}</span>
+      <span class="diff-num diff-num-new">${l.newNo == null ? '' : l.newNo}</span>
+      <span class="diff-sigil">${sigil}</span>
+      <span class="diff-content"></span>
+    `;
+    lineEl.querySelector('.diff-content').textContent = l.line;
+    return lineEl;
+  }
+
+  // Build a clickable "N hidden lines — show" placeholder. When clicked,
+  // replaces itself with the actual lines (or with another gap row that
+  // expands the rest if the user only wants a piece).
+  function mkGapRow(hiddenLines, renderer) {
+    const row = document.createElement('div');
+    row.className = 'diff-gap';
+    const count = hiddenLines.length;
+    row.innerHTML = `
+      <button class="diff-gap-btn" title="Show all ${count} hidden line${count === 1 ? '' : 's'}">
+        <i data-lucide="chevrons-up-down"></i>
+        <span>${count} unchanged line${count === 1 ? '' : 's'} hidden</span>
+      </button>
+    `;
+    row.querySelector('button').addEventListener('click', () => {
+      const frag = document.createDocumentFragment();
+      hiddenLines.forEach(l => frag.appendChild(renderer(l)));
+      row.replaceWith(frag);
+    });
+    return row;
+  }
+
+  function renderUnified(host, changes, segments) {
+    if (!segments) {
+      flatten(changes).forEach(l => host.appendChild(mkUnifiedLine(l)));
+    } else {
+      segments.forEach(seg => {
+        if (seg.type === 'visible') {
+          seg.lines.forEach(l => host.appendChild(mkUnifiedLine(l)));
+        } else {
+          host.appendChild(mkGapRow(seg.lines, mkUnifiedLine));
+        }
+      });
+    }
+    if (window.renderIcons) window.renderIcons();
+  }
+
+  // Side-by-side: grid with two columns; gap rows span both via
+  // grid-column: 1 / -1.
+  function renderSplit(host, oldLines, newLines, changes, segments) {
     host.classList.add('split');
     const wrap = document.createElement('div');
     wrap.className = 'diff-split';
 
-    const colOld = document.createElement('div');
-    colOld.className = 'diff-col diff-col-old';
-    const colNew = document.createElement('div');
-    colNew.className = 'diff-col diff-col-new';
-
-    let oldNo = 0, newNo = 0;
-    changes.forEach(c => {
-      const lines = c.value.split('\n');
-      if (lines[lines.length - 1] === '') lines.pop();
-      if (!c.added && !c.removed) {
-        lines.forEach(line => {
-          oldNo++; newNo++;
-          colOld.appendChild(mkLine('context', oldNo, line));
-          colNew.appendChild(mkLine('context', newNo, line));
+    const segs = segments || [{ type: 'visible', lines: flatten(changes) }];
+    segs.forEach(seg => {
+      if (seg.type === 'gap') {
+        const gap = document.createElement('div');
+        gap.className = 'diff-gap diff-gap-full';
+        const count = seg.lines.length;
+        gap.innerHTML = `
+          <button class="diff-gap-btn" title="Show all ${count} hidden line${count === 1 ? '' : 's'}">
+            <i data-lucide="chevrons-up-down"></i>
+            <span>${count} unchanged line${count === 1 ? '' : 's'} hidden</span>
+          </button>
+        `;
+        gap.querySelector('button').addEventListener('click', () => {
+          const frag = document.createDocumentFragment();
+          seg.lines.forEach(l => appendSplitPair(frag, l));
+          gap.replaceWith(frag);
         });
-      } else if (c.removed) {
-        lines.forEach(line => {
-          oldNo++;
-          colOld.appendChild(mkLine('removed', oldNo, line));
-          colNew.appendChild(mkLine('empty', '', ''));
-        });
-      } else if (c.added) {
-        lines.forEach(line => {
-          newNo++;
-          colOld.appendChild(mkLine('empty', '', ''));
-          colNew.appendChild(mkLine('added', newNo, line));
-        });
+        wrap.appendChild(gap);
+      } else {
+        seg.lines.forEach(l => appendSplitPair(wrap, l));
       }
     });
 
-    wrap.appendChild(colOld);
-    wrap.appendChild(colNew);
     host.appendChild(wrap);
+    if (window.renderIcons) window.renderIcons();
   }
 
-  function mkLine(cls, num, content) {
+  function appendSplitPair(parent, l) {
+    const left = mkSplitCell(
+      l.kind === 'added' ? 'empty' : l.kind,
+      l.kind === 'added' ? '' : l.oldNo,
+      l.kind === 'added' ? '' : l.line
+    );
+    const right = mkSplitCell(
+      l.kind === 'removed' ? 'empty' : l.kind,
+      l.kind === 'removed' ? '' : l.newNo,
+      l.kind === 'removed' ? '' : l.line
+    );
+    parent.appendChild(left);
+    parent.appendChild(right);
+  }
+
+  function mkSplitCell(cls, num, content) {
     const el = document.createElement('div');
     el.className = 'diff-line ' + cls;
     el.innerHTML = `<span class="diff-num">${num}</span><span class="diff-content"></span>`;
