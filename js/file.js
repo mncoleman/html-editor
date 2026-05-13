@@ -1,11 +1,20 @@
 // File operations: File System Access API, import/export, drag-drop on page
 window.FileOps = (function() {
   const ES = window.EditorState;
-  const supportsFSA = 'showOpenFilePicker' in window;
+  const hasFSA = 'showOpenFilePicker' in window;
+  const isSecure = window.isSecureContext;
+  const supportsFSA = hasFSA && isSecure;
 
   function init() {
     const warn = document.getElementById('browser-warning');
-    if (!supportsFSA && warn) warn.hidden = false;
+    if (warn && !supportsFSA) {
+      if (!isSecure && location.protocol === 'http:') {
+        warn.innerHTML = `Live local-file editing requires HTTPS. <a href="${location.href.replace(/^http:/, 'https:')}" style="color:inherit;text-decoration:underline;">Switch to HTTPS →</a>`;
+      } else if (!hasFSA) {
+        warn.textContent = "Your browser doesn't support live local file editing (Safari/Firefox). Import/Export still works.";
+      }
+      warn.hidden = false;
+    }
 
     // Drop on page (empty state)
     const drop = (e) => {
