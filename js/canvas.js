@@ -98,8 +98,18 @@ window.Canvas = (function() {
     const body = doc.body;
     if (!body) return;
 
-    // Click to select
+    // Click to select. Also intercepts ALL link clicks defensively, in both
+    // edit and preview mode, so the iframe content can't escape to the
+    // parent frame (e.g. via <base target="_top"> in the source).
     body.addEventListener('click', (e) => {
+      const link = e.target && e.target.closest && e.target.closest('a');
+      if (link) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (isPreview) handlePreviewLinkClick(link);
+        else ES.select(link);
+        return;
+      }
       if (isPreview) return;
       e.preventDefault();
       e.stopPropagation();
@@ -107,6 +117,12 @@ window.Canvas = (function() {
       if (target && target.nodeType === 1 && target !== doc.documentElement && target !== body.parentNode) {
         ES.select(target);
       }
+    }, true);
+
+    // Also catch any other navigation attempts (form submit, etc.)
+    body.addEventListener('submit', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
     }, true);
 
     // Double click to edit text. If the target is already in an editable
@@ -171,6 +187,27 @@ window.Canvas = (function() {
       }
     });
     mo.observe(doc.documentElement, { childList: true, subtree: true, attributes: true, characterData: true });
+  }
+
+  function handlePreviewLinkClick(link) {
+    const href = link.getAttribute('href') || '';
+    if (!href) return;
+    if (href.startsWith('#')) {
+      // In-document anchor — scroll within the iframe
+      const doc = ES.state.doc;
+      const target = doc.getElementById(href.slice(1)) || doc.querySelector(`a[name="${href.slice(1)}"]`);
+      if (target && typeof target.scrollIntoView === 'function') {
+        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+      return;
+    }
+    if (/^(https?:)?\/\//i.test(href) || href.startsWith('mailto:') || href.startsWith('tel:')) {
+      // External — open in a new tab so the editor isn't replaced
+      window.open(href, '_blank', 'noopener,noreferrer');
+      return;
+    }
+    // Relative URLs (./other.html, /path/, etc.) — ignored in preview;
+    // they'd otherwise resolve against about:srcdoc which is meaningless.
   }
 
   function enterTextEdit(el, mouseEvent) {
