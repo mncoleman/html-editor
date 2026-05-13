@@ -1,0 +1,48 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Write version.json
+        run: |
+          SHORT=$(echo "${GITHUB_SHA}" | cut -c1-7)
+          BUILT_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          cat > version.json <<EOF
+          {
+            "sha": "${GITHUB_SHA}",
+            "short": "${SHORT}",
+            "ref": "${GITHUB_REF_NAME}",
+            "built_at": "${BUILT_AT}",
+            "run_id": "${GITHUB_RUN_ID}"
+          }
+          EOF
+          cat version.json
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+
+      - id: deployment
+        uses: actions/deploy-pages@v4
