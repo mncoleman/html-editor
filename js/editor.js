@@ -3,10 +3,18 @@
   const ES = window.EditorState;
   let isPreview = false;
 
+  // Render Lucide icons (initial + idempotent for dynamic content)
+  window.renderIcons = function() {
+    if (window.lucide && lucide.createIcons) lucide.createIcons();
+  };
+
   document.addEventListener('DOMContentLoaded', () => {
     ES.loadTheme();
     ES.loadSnippets();
     ES.loadRecent();
+
+    // Wait one tick so the deferred lucide UMD has executed
+    requestAnimationFrame(() => window.renderIcons());
 
     window.Canvas.init();
     window.Tree.init();
@@ -28,7 +36,7 @@
       const restore = document.createElement('button');
       restore.className = 'btn';
       restore.style.marginTop = '12px';
-      restore.innerHTML = `<span class="icon">⏱</span><span>Restore last session</span><small>${age} ago · ${escapeHtml(auto.name)}</small>`;
+      restore.innerHTML = `<i data-lucide="history" class="icon"></i><span>Restore last session</span><small>${age} ago · ${escapeHtml(auto.name)}</small>`;
       restore.addEventListener('click', () => {
         ES.setFile(null, auto.name);
         showEditor();
@@ -37,6 +45,7 @@
       const empty = document.querySelector('.empty-inner');
       const hint = document.querySelector('.empty-drop-hint');
       hint.parentNode.insertBefore(restore, hint);
+      window.renderIcons();
     }
   });
 
@@ -102,11 +111,7 @@
     document.getElementById('tb-export').addEventListener('click', () => window.FileOps.exportFile());
     document.getElementById('tb-save').addEventListener('click', () => window.FileOps.save());
 
-    document.getElementById('tb-theme').addEventListener('click', () => {
-      ES.toggleTheme();
-      document.getElementById('tb-theme').textContent = ES.state.theme === 'dark' ? '🌙' : '☀️';
-    });
-    document.getElementById('tb-theme').textContent = ES.state.theme === 'dark' ? '🌙' : '☀️';
+    document.getElementById('tb-theme').addEventListener('click', () => ES.toggleTheme());
   }
 
   function wireTabs() {
@@ -137,9 +142,11 @@
         if (ES.state.dirty) {
           saveStatus.dataset.state = 'dirty';
           saveStatus.textContent = '● Unsaved';
+          document.body.dataset.dirty = 'true';
         } else {
           saveStatus.dataset.state = 'saved';
           saveStatus.textContent = 'Saved';
+          document.body.dataset.dirty = 'false';
         }
       }
       if (evt === 'history') {

@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>HTML Editor</title>
 <link rel="stylesheet" href="css/editor.css">
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js" defer></script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='18' fill='%230a0a0a'/%3E%3Ctext x='50' y='66' font-family='Roboto,Arial,sans-serif' font-size='52' font-weight='700' fill='%23fafafa' text-anchor='middle'%3EM%3C/text%3E%3C/svg%3E">
 </head>
 <body>
@@ -12,26 +13,27 @@
 <!-- Empty state when no document loaded -->
 <div id="empty-state" class="empty-state">
   <div class="empty-inner">
+    <div class="empty-logo"><i data-lucide="code-2"></i></div>
     <h1><strong>HTML</strong> Editor</h1>
     <p>Drop in an HTML file to start editing visually. Drag, drop, click to edit — and save back to your local file with live changes.</p>
     <div class="empty-actions">
       <button class="btn btn-primary" id="empty-open-local" title="Edit a file on your disk with live save">
-        <span class="icon">📁</span>
+        <i data-lucide="folder-open" class="icon"></i>
         <span>Open Local File</span>
         <small>Live link — saves to disk</small>
       </button>
       <button class="btn" id="empty-import">
-        <span class="icon">⬆️</span>
+        <i data-lucide="upload" class="icon"></i>
         <span>Import HTML</span>
         <small>Read-only file picker</small>
       </button>
       <button class="btn" id="empty-new">
-        <span class="icon">✨</span>
+        <i data-lucide="file-plus" class="icon"></i>
         <span>Start Blank</span>
         <small>Empty page</small>
       </button>
     </div>
-    <div class="empty-drop-hint">…or drop an .html file anywhere</div>
+    <div class="empty-drop-hint"><i data-lucide="mouse-pointer-2" class="hint-icon"></i> or drop an .html file anywhere</div>
     <div class="empty-shortcuts">
       <kbd>⌘S</kbd> save · <kbd>⌘Z</kbd> undo · <kbd>⌘D</kbd> duplicate · <kbd>Delete</kbd> remove · <kbd>Esc</kbd> deselect
     </div>
@@ -58,31 +60,34 @@
     </div>
 
     <div class="toolbar-center">
-      <button class="tool-btn" id="tb-undo" title="Undo (⌘Z)">↶</button>
-      <button class="tool-btn" id="tb-redo" title="Redo (⌘⇧Z)">↷</button>
+      <button class="tool-btn icon-only anim-press" id="tb-undo" title="Undo (⌘Z)"><i data-lucide="undo-2"></i></button>
+      <button class="tool-btn icon-only anim-press" id="tb-redo" title="Redo (⌘⇧Z)"><i data-lucide="redo-2"></i></button>
       <span class="divider"></span>
-      <button class="tool-btn" id="tb-duplicate" title="Duplicate (⌘D)">⧉</button>
-      <button class="tool-btn" id="tb-delete" title="Delete (⌫)">🗑</button>
+      <button class="tool-btn icon-only anim-press" id="tb-duplicate" title="Duplicate (⌘D)"><i data-lucide="copy"></i></button>
+      <button class="tool-btn icon-only anim-shake" id="tb-delete" title="Delete (⌫)"><i data-lucide="trash-2"></i></button>
       <span class="divider"></span>
-      <button class="tool-btn" id="tb-move-up" title="Move up">↑</button>
-      <button class="tool-btn" id="tb-move-down" title="Move down">↓</button>
-      <button class="tool-btn" id="tb-parent" title="Select parent">⤴</button>
+      <button class="tool-btn icon-only anim-press" id="tb-move-up" title="Move up"><i data-lucide="arrow-up"></i></button>
+      <button class="tool-btn icon-only anim-press" id="tb-move-down" title="Move down"><i data-lucide="arrow-down"></i></button>
+      <button class="tool-btn icon-only anim-press" id="tb-parent" title="Select parent"><i data-lucide="corner-left-up"></i></button>
       <span class="divider"></span>
       <div class="device-toggle">
-        <button class="tool-btn device-btn active" data-device="desktop" title="Desktop">🖥</button>
-        <button class="tool-btn device-btn" data-device="tablet" title="Tablet">📱</button>
-        <button class="tool-btn device-btn" data-device="mobile" title="Mobile">📲</button>
+        <button class="tool-btn icon-only device-btn active" data-device="desktop" title="Desktop"><i data-lucide="monitor"></i></button>
+        <button class="tool-btn icon-only device-btn" data-device="tablet" title="Tablet"><i data-lucide="tablet"></i></button>
+        <button class="tool-btn icon-only device-btn" data-device="mobile" title="Mobile"><i data-lucide="smartphone"></i></button>
       </div>
       <span class="divider"></span>
-      <button class="tool-btn" id="tb-preview" title="Toggle preview mode (P)">👁</button>
+      <button class="tool-btn icon-only anim-blink" id="tb-preview" title="Toggle preview mode (P)"><i data-lucide="eye"></i></button>
     </div>
 
     <div class="toolbar-right">
-      <button class="tool-btn" id="tb-open" title="Open local file">📁 Open</button>
-      <button class="tool-btn" id="tb-import" title="Import HTML">⬆ Import</button>
-      <button class="tool-btn" id="tb-export" title="Export HTML">⬇ Export</button>
-      <button class="tool-btn primary" id="tb-save" title="Save (⌘S)">💾 Save</button>
-      <button class="tool-btn icon-only" id="tb-theme" title="Toggle theme">🌙</button>
+      <button class="tool-btn anim-press" id="tb-open" title="Open local file"><i data-lucide="folder-open"></i><span>Open</span></button>
+      <button class="tool-btn anim-press" id="tb-import" title="Import HTML"><i data-lucide="upload"></i><span>Import</span></button>
+      <button class="tool-btn anim-press" id="tb-export" title="Export HTML"><i data-lucide="download"></i><span>Export</span></button>
+      <button class="tool-btn primary anim-press" id="tb-save" title="Save (⌘S)"><i data-lucide="save"></i><span>Save</span></button>
+      <button class="tool-btn icon-only theme-toggle" id="tb-theme" title="Toggle theme">
+        <i data-lucide="sun" class="th-sun"></i>
+        <i data-lucide="moon" class="th-moon"></i>
+      </button>
     </div>
   </header>
 
@@ -131,11 +136,11 @@
           <div class="sel-box" id="sel-box"></div>
           <div class="sel-label" id="sel-label"></div>
           <div class="sel-toolbar" id="sel-toolbar">
-            <button data-action="move-up" title="Move up">↑</button>
-            <button data-action="move-down" title="Move down">↓</button>
-            <button data-action="parent" title="Select parent">⤴</button>
-            <button data-action="duplicate" title="Duplicate">⧉</button>
-            <button data-action="delete" title="Delete">🗑</button>
+            <button data-action="move-up" title="Move up"><i data-lucide="arrow-up"></i></button>
+            <button data-action="move-down" title="Move down"><i data-lucide="arrow-down"></i></button>
+            <button data-action="parent" title="Select parent"><i data-lucide="corner-left-up"></i></button>
+            <button data-action="duplicate" title="Duplicate"><i data-lucide="copy"></i></button>
+            <button data-action="delete" title="Delete"><i data-lucide="trash-2"></i></button>
           </div>
           <div class="hover-box" id="hover-box" hidden></div>
           <div class="drop-indicator" id="drop-indicator" hidden></div>
