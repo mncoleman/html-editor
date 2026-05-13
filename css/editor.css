@@ -185,6 +185,33 @@ body[data-dirty="true"] #tb-save .lucide {
   50% { transform: scale(1.12); }
 }
 
+/* Refresh button: spin slowly + warning ring when disk has external changes */
+#tb-refresh.has-update {
+  color: var(--warn);
+  position: relative;
+}
+#tb-refresh.has-update [data-lucide],
+#tb-refresh.has-update .lucide {
+  animation: refresh-spin 3s linear infinite;
+}
+#tb-refresh.has-update::after {
+  content: '';
+  position: absolute;
+  top: 3px; right: 3px;
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--warn);
+  box-shadow: 0 0 8px var(--warn);
+  animation: pulse-dot 1.4s ease-in-out infinite;
+}
+@keyframes refresh-spin {
+  to { transform: rotate(360deg); }
+}
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.6); }
+}
+
 /* Status bar/recent icons */
 .recent-item [data-lucide], .snippet-item [data-lucide] { width: 12px; height: 12px; opacity: 0.6; }
 
