@@ -62,8 +62,16 @@ window.Canvas = (function() {
       handleDrop(e.clientX, e.clientY);
     });
     canvasWrap.addEventListener('dragleave', (e) => {
-      if (e.target === canvasWrap) hideDropIndicator();
+      // Use the relatedTarget heuristic — only hide when leaving the
+      // wrap entirely, not when crossing between descendant elements
+      if (!canvasWrap.contains(e.relatedTarget)) hideDropIndicator();
     });
+    // Safety net: if a drag is aborted anywhere (Esc, drop outside the
+    // window, etc.), clear the indicator and any stale drag state.
+    document.addEventListener('dragend', () => {
+      hideDropIndicator();
+      lastDropTarget = null;
+    }, true);
   }
 
   function setDragData(d) { dragData = d; }
@@ -137,18 +145,32 @@ window.Canvas = (function() {
       enterTextEdit(target, e);
     }, true);
 
-    // Hover highlight
+    // Hover highlight.
+    // - Skip if same target as last move (no need to redraw)
+    // - Skip body/html (would paint a giant box over everything)
+    // - Skip elements >70% of the viewport (huge sections feel like the
+    //   box is "following the mouse" as it crosses padding)
+    // - Always hide the drop indicator when not in a drag (defensive
+    //   against a stuck indicator from an aborted drag)
+    let lastHoverTarget = null;
     body.addEventListener('mousemove', (e) => {
       if (isPreview) return;
+      if (!dragData && !dropIndicator.hidden) hideDropIndicator();
       if (dragData) return;
       const target = e.target;
-      if (target && target.nodeType === 1 && target !== ES.state.selected) {
+      if (target === lastHoverTarget) return;
+      lastHoverTarget = target;
+      if (target && target.nodeType === 1
+          && target !== ES.state.selected
+          && target !== doc.body
+          && target !== doc.documentElement
+          && !isOversized(target)) {
         showHoverBox(target);
       } else {
         hideHoverBox();
       }
     });
-    body.addEventListener('mouseleave', () => hideHoverBox());
+    body.addEventListener('mouseleave', () => { hideHoverBox(); lastHoverTarget = null; });
 
     // Internal drag-drop: drag elements to reorder
     body.addEventListener('mousedown', (e) => {
@@ -303,6 +325,14 @@ window.Canvas = (function() {
     });
   }
   function hideHoverBox() { hoverBox.hidden = true; }
+
+  function isOversized(el) {
+    const r = el.getBoundingClientRect();
+    const view = el.ownerDocument.defaultView;
+    const area = r.width * r.height;
+    const vw = view.innerWidth, vh = view.innerHeight;
+    return area > (vw * vh * 0.7);
+  }
 
   function relRect(el) {
     if (!el || !el.getBoundingClientRect) return null;
