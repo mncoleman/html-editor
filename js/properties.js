@@ -397,6 +397,12 @@ window.Properties = (function() {
   }
 
   // ---- Style writer ----
+  // Re-rendering the panel mid-interaction destroys focused inputs (closes
+  // native color pickers, drops caret in text fields). So we only re-render
+  // for properties that change WHICH controls should be visible (display,
+  // position). For everything else (color/size/padding/...), we mutate in
+  // place — the user's typed value already reflects what they want.
+  const STRUCTURAL_PROPS = new Set(['display', 'position', 'flex-direction']);
   let snapTimer = null;
   function setStyle(el, prop, value) {
     if (value == null || value === '') {
@@ -405,12 +411,13 @@ window.Properties = (function() {
       el.style.setProperty(prop, value);
     }
     if (el.getAttribute('style') === '') el.removeAttribute('style');
-    // Debounce snapshot so dragging a slider doesn't create 100 history entries
     if (snapTimer) clearTimeout(snapTimer);
     snapTimer = setTimeout(() => ES.snapshot('style ' + prop), 200);
     ES.setDirty(true);
-    if (window.__heRenderTimer) clearTimeout(window.__heRenderTimer);
-    window.__heRenderTimer = setTimeout(render, 250);
+    if (STRUCTURAL_PROPS.has(prop)) {
+      if (window.__heRenderTimer) clearTimeout(window.__heRenderTimer);
+      window.__heRenderTimer = setTimeout(render, 200);
+    }
   }
 
   // ---- Helpers ----
