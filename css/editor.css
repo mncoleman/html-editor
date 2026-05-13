@@ -1364,44 +1364,55 @@ body[data-mode="source"] .workspace { grid-template-columns: 1fr; }
 }
 .diff-body .diff-line {
   display: grid;
-  grid-template-columns: 48px 48px 22px 1fr;
-  padding: 0 8px;
+  grid-template-columns: 48px 48px 24px 1fr;
+  padding: 0 0 0 8px;
   white-space: pre;
   min-height: 18px;
+  border-left: 3px solid transparent;
+  color: var(--text);
 }
 .diff-body .diff-num {
   text-align: right;
   padding-right: 8px;
   color: var(--text-faint);
   user-select: none;
+  font-variant-numeric: tabular-nums;
 }
 .diff-body .diff-sigil {
   text-align: center;
   color: var(--text-faint);
   user-select: none;
+  font-weight: 700;
 }
 .diff-body .diff-content {
-  color: var(--text);
+  color: inherit;
   overflow-x: visible;
 }
 .diff-body .diff-line.context { color: var(--text-dim); }
-.diff-body .diff-line.context .diff-content { color: var(--text-dim); }
 .diff-body .diff-line.added {
-  background: rgba(34, 197, 94, 0.13);
+  background: rgba(34, 197, 94, 0.18) !important;
+  border-left-color: #22c55e !important;
+  color: #4ade80 !important;
 }
-.diff-body .diff-line.added .diff-content,
-.diff-body .diff-line.added .diff-sigil { color: #22c55e; }
+.diff-body .diff-line.added .diff-sigil { color: #22c55e !important; }
+.diff-body .diff-line.added .diff-num { color: rgba(34, 197, 94, 0.7); background: rgba(34, 197, 94, 0.08); }
 .diff-body .diff-line.removed {
-  background: rgba(239, 68, 68, 0.13);
+  background: rgba(239, 68, 68, 0.18) !important;
+  border-left-color: #ef4444 !important;
+  color: #f87171 !important;
 }
-.diff-body .diff-line.removed .diff-content,
-.diff-body .diff-line.removed .diff-sigil { color: #ef4444; }
+.diff-body .diff-line.removed .diff-sigil { color: #ef4444 !important; }
+.diff-body .diff-line.removed .diff-num { color: rgba(239, 68, 68, 0.7); background: rgba(239, 68, 68, 0.08); }
 .diff-body .diff-line.empty {
   background: repeating-linear-gradient(135deg,
     transparent 0, transparent 6px,
     var(--bg-3) 6px, var(--bg-3) 7px);
   min-height: 18px;
 }
+
+/* Light theme: darker green/red text for legibility on white */
+html[data-theme="light"] .diff-body .diff-line.added { color: #15803d !important; }
+html[data-theme="light"] .diff-body .diff-line.removed { color: #b91c1c !important; }
 
 /* Split / side-by-side view */
 .diff-body.split { display: block; padding: 0; }
