@@ -264,10 +264,29 @@ window.Canvas = (function() {
     }
   }
 
+  // An element is text-editable if it has no element children, OR if all of
+  // its element children are inline (a, strong, em, span, br, code, …).
+  // This is the practical definition of "the user can type into this": a
+  // <p>Hello <strong>world</strong>!</p> should still enter edit mode.
+  const INLINE_TAGS = new Set([
+    'a','abbr','b','bdi','bdo','br','cite','code','data','dfn','em','i',
+    'img','input','kbd','label','mark','q','s','samp','small','span',
+    'strong','sub','sup','time','u','var','wbr'
+  ]);
+  // Tags that themselves are not meaningful text-edit surfaces even if
+  // empty (containers/structural). Click selects them; never enter
+  // contenteditable on them.
+  const NON_EDITABLE_TAGS = new Set([
+    'html','head','body','script','style','meta','link','title','base',
+    'iframe','video','audio','canvas','svg','source','track'
+  ]);
   function hasTextContentOnly(el) {
     if (!el) return false;
-    for (const child of el.childNodes) {
-      if (child.nodeType === 1) return false; // element child = not text-only
+    const tag = el.tagName && el.tagName.toLowerCase();
+    if (NON_EDITABLE_TAGS.has(tag)) return false;
+    for (const child of el.children) {
+      const childTag = child.tagName.toLowerCase();
+      if (!INLINE_TAGS.has(childTag)) return false;
     }
     return true;
   }
