@@ -53,6 +53,14 @@
         <span class="brand-mark">H</span>
         <span class="brand-text">HTML Editor</span>
       </div>
+      <div class="mode-toggle" id="mode-toggle" role="tablist" aria-label="Editor mode">
+        <button class="mode-btn active" data-mode="visual" title="Visual editing (may normalize source formatting on save)">
+          <i data-lucide="layout-template"></i><span>Visual</span>
+        </button>
+        <button class="mode-btn" data-mode="source" title="Source editing (byte-for-byte; preserves formatting)">
+          <i data-lucide="code-2"></i><span>Source</span>
+        </button>
+      </div>
       <div class="file-info">
         <span id="file-name" class="file-name">untitled.html</span>
         <span id="save-status" class="save-status" data-state="saved">Saved</span>
@@ -130,7 +138,7 @@
     </aside>
 
     <!-- Canvas -->
-    <section class="canvas-wrap">
+    <section class="canvas-wrap" id="canvas-wrap">
       <div class="canvas-frame" data-device="desktop">
         <iframe id="canvas" sandbox="allow-same-origin allow-forms" title="Canvas"></iframe>
         <div class="selection-overlay" id="selection-overlay" hidden>
@@ -147,6 +155,11 @@
           <div class="drop-indicator" id="drop-indicator" hidden></div>
         </div>
       </div>
+    </section>
+
+    <!-- Source mode pane -->
+    <section class="source-wrap" id="source-wrap" hidden>
+      <div class="source-pane" id="source-pane"></div>
     </section>
 
     <!-- Right sidebar (properties) -->
@@ -196,6 +209,8 @@
 <script src="js/tree.js"></script>
 <script src="js/properties.js"></script>
 <script src="js/blocks-panel.js"></script>
+<script src="js/source.js"></script>
+<script src="js/mode-switch.js"></script>
 <script src="js/file.js"></script>
 <script src="js/keyboard.js"></script>
 <script src="js/editor.js"></script>

@@ -60,7 +60,8 @@ window.FileOps = (function() {
       const file = await handle.getFile();
       const text = await file.text();
       ES.setFile(handle, file.name);
-      window.Canvas.loadHtml(text);
+      ES.state.sourceHtml = text;
+      await window.ModeSwitch.loadIntoInitialMode(text);
       ES.addRecent(file.name);
       toast(`Opened ${file.name} — changes will save to disk`, 'success');
       ES.setDirty(false);
@@ -80,7 +81,8 @@ window.FileOps = (function() {
     try {
       const text = await file.text();
       ES.setFile(null, file.name);
-      window.Canvas.loadHtml(text);
+      ES.state.sourceHtml = text;
+      await window.ModeSwitch.loadIntoInitialMode(text);
       ES.addRecent(file.name);
       toast(`Imported ${file.name} (read-only — use Export to save)`, '');
       ES.setDirty(false);
@@ -89,18 +91,29 @@ window.FileOps = (function() {
     }
   }
 
+  // Get the canonical bytes to write, depending on which mode is active.
+  // - Source mode: the CodeMirror buffer, byte-for-byte.
+  // - Visual mode: serialize the iframe DOM (known to normalize formatting).
+  function currentHtml() {
+    if (ES.state.mode === 'source' && window.Source) {
+      return window.Source.getContent();
+    }
+    if (!ES.state.doc) return ES.state.sourceHtml || '';
+    return stripEditorTraces('<!DOCTYPE html>\n' + ES.state.doc.documentElement.outerHTML);
+  }
+
   async function save() {
-    const doc = ES.state.doc;
-    if (!doc) return;
-    const html = '<!DOCTYPE html>\n' + doc.documentElement.outerHTML;
+    const html = currentHtml();
+    if (!html) return;
     if (ES.state.fileHandle) {
       try {
         const status = document.getElementById('save-status');
         status.dataset.state = 'saving';
         status.textContent = 'Saving…';
         const writable = await ES.state.fileHandle.createWritable();
-        await writable.write(stripEditorTraces(html));
+        await writable.write(html);
         await writable.close();
+        ES.state.sourceHtml = html;
         ES.setDirty(false);
         status.dataset.state = 'saved';
         status.textContent = 'Saved';
@@ -112,23 +125,21 @@ window.FileOps = (function() {
         toast('Save failed: ' + e.message, 'error');
       }
     } else {
-      // No handle — export instead
       exportFile();
     }
   }
 
   function exportFile() {
-    const doc = ES.state.doc;
-    if (!doc) return;
-    const html = '<!DOCTYPE html>\n' + doc.documentElement.outerHTML;
-    const cleaned = stripEditorTraces(html);
-    const blob = new Blob([cleaned], { type: 'text/html' });
+    const html = currentHtml();
+    if (!html) return;
+    const blob = new Blob([html], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
     a.download = ES.state.fileName || 'untitled.html';
     a.click();
     URL.revokeObjectURL(url);
+    ES.state.sourceHtml = html;
     ES.setDirty(false);
     toast('Exported ' + a.download, 'success');
   }
@@ -141,7 +152,7 @@ window.FileOps = (function() {
       .replace(/\s+data-he-editing="[^"]*"/g, '');
   }
 
-  function newBlank() {
+  async function newBlank() {
     const blank = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -159,7 +170,8 @@ h1 { font-size: 32px; }
 </body>
 </html>`;
     ES.setFile(null, 'untitled.html');
-    window.Canvas.loadHtml(blank);
+    ES.state.sourceHtml = blank;
+    await window.ModeSwitch.loadIntoInitialMode(blank);
     ES.setDirty(false);
   }
 
