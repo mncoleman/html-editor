@@ -53,10 +53,10 @@ window.FileOps = (function() {
       return;
     }
     try {
-      const [handle] = await window.showOpenFilePicker({
-        types: [{ description: 'HTML files', accept: { 'text/html': ['.html', '.htm'] } }],
-        excludeAcceptAllOption: false,
-      });
+      // No `types` filter: Chrome's first-invocation behavior with
+      // accept-maps can grey out matching files until the picker is
+      // dismissed and reopened. Simpler to let the user pick any file.
+      const [handle] = await window.showOpenFilePicker({ multiple: false });
       const file = await handle.getFile();
       const text = await file.text();
       ES.setFile(handle, file.name);
