@@ -95,6 +95,8 @@
     <div class="toolbar-right">
       <button class="tool-btn anim-press" id="tb-open" title="Open local file"><i data-lucide="folder-open"></i><span>Open</span></button>
       <button class="tool-btn icon-only anim-press" id="tb-refresh" title="Refresh from disk — pull in external changes" disabled><i data-lucide="refresh-cw"></i></button>
+      <button class="tool-btn icon-only anim-press" id="tb-diff" title="Show diff vs. file on disk" disabled><i data-lucide="git-compare-arrows"></i></button>
+      <button class="tool-btn icon-only anim-press" id="tb-git-diff" title="Show diff vs. git HEAD (asks for repo directory)" disabled><i data-lucide="git-branch"></i></button>
       <button class="tool-btn anim-press" id="tb-import" title="Import HTML"><i data-lucide="upload"></i><span>Import</span></button>
       <button class="tool-btn anim-press" id="tb-export" title="Export HTML"><i data-lucide="download"></i><span>Export</span></button>
       <button class="tool-btn primary anim-press" id="tb-save" title="Save (⌘S)"><i data-lucide="save"></i><span>Save</span></button>
@@ -231,6 +233,8 @@
 <script src="js/source.js"></script>
 <script src="js/mode-switch.js"></script>
 <script src="js/file.js"></script>
+<script src="js/diff.js"></script>
+<script src="js/git.js"></script>
 <script src="js/keyboard.js"></script>
 <script src="js/editor.js"></script>
 <script src="js/version.js"></script>

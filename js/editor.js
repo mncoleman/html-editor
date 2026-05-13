@@ -125,6 +125,8 @@
       await window.FileOps.openLocalFile();
     });
     document.getElementById('tb-refresh').addEventListener('click', () => window.FileOps.reloadFromDisk());
+    document.getElementById('tb-diff').addEventListener('click', () => window.DiffViewer.showAgainstDisk());
+    document.getElementById('tb-git-diff').addEventListener('click', () => window.GitDiff.showDiff());
     document.getElementById('tb-import').addEventListener('click', () => window.FileOps.promptImport());
     document.getElementById('tb-export').addEventListener('click', () => window.FileOps.exportFile());
     document.getElementById('tb-save').addEventListener('click', () => window.FileOps.save());
