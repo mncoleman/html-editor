@@ -1,0 +1,464 @@
+// Canvas: iframe management, selection, hover, drag-drop inside the canvas
+window.Canvas = (function() {
+  const ES = window.EditorState;
+  let iframe, overlay, selBox, selLabel, selToolbar, hoverBox, dropIndicator;
+  let canvasFrame;
+  let isPreview = false;
+  let dragData = null; // { type: 'block'|'move', payload, ghostEl? }
+
+  // Inject styles into the iframe so editor selection works
+  const IFRAME_STYLES = `
+    [data-he-editing] { outline: 2px solid #6c8cff !important; outline-offset: -2px !important; }
+    html { cursor: default; }
+    body { min-height: 100vh; }
+  `;
+
+  function init() {
+    iframe = document.getElementById('canvas');
+    overlay = document.getElementById('selection-overlay');
+    selBox = document.getElementById('sel-box');
+    selLabel = document.getElementById('sel-label');
+    selToolbar = document.getElementById('sel-toolbar');
+    hoverBox = document.getElementById('hover-box');
+    dropIndicator = document.getElementById('drop-indicator');
+    canvasFrame = document.querySelector('.canvas-frame');
+
+    // Selection toolbar buttons
+    selToolbar.addEventListener('click', (e) => {
+      const btn = e.target.closest('button');
+      if (!btn) return;
+      const action = btn.dataset.action;
+      handleToolbarAction(action);
+    });
+
+    // Canvas resize observer to keep overlay aligned
+    const ro = new ResizeObserver(() => updateOverlay());
+    ro.observe(canvasFrame);
+
+    // Listen to selection / doc state
+    ES.on((evt, payload) => {
+      if (evt === 'selection-changed') updateOverlay();
+      if (evt === 'doc-replaced' || evt === 'doc-changed') {
+        // After doc replacement we need to re-wire events
+        wireIframeEvents();
+        updateOverlay();
+      }
+    });
+
+    // Window resize / scroll
+    window.addEventListener('resize', updateOverlay);
+
+    // Listen for drops on canvas wrap from external block drags
+    const canvasWrap = document.querySelector('.canvas-wrap');
+    canvasWrap.addEventListener('dragover', (e) => {
+      if (!dragData) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'copy';
+      updateDropTarget(e.clientX, e.clientY);
+    });
+    canvasWrap.addEventListener('drop', (e) => {
+      if (!dragData) return;
+      e.preventDefault();
+      handleDrop(e.clientX, e.clientY);
+    });
+    canvasWrap.addEventListener('dragleave', (e) => {
+      if (e.target === canvasWrap) hideDropIndicator();
+    });
+  }
+
+  function setDragData(d) { dragData = d; }
+  function clearDragData() { dragData = null; hideDropIndicator(); }
+  function getDragData() { return dragData; }
+
+  function loadHtml(html) {
+    if (!html || !html.trim()) {
+      html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Untitled</title></head><body></body></html>';
+    }
+    iframe.srcdoc = html;
+    iframe.onload = () => {
+      const doc = iframe.contentDocument;
+      injectEditorStyles(doc);
+      ES.setDoc(doc);
+      wireIframeEvents();
+    };
+  }
+
+  function injectEditorStyles(doc) {
+    const style = doc.createElement('style');
+    style.id = '__he_styles__';
+    style.textContent = IFRAME_STYLES;
+    doc.head.appendChild(style);
+  }
+
+  function wireIframeEvents() {
+    const doc = ES.state.doc;
+    if (!doc) return;
+    // Re-inject styles if they were lost (e.g., after undo via doc.write)
+    if (!doc.getElementById('__he_styles__') && doc.head) injectEditorStyles(doc);
+    const body = doc.body;
+    if (!body) return;
+
+    // Click to select
+    body.addEventListener('click', (e) => {
+      if (isPreview) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const target = e.target;
+      if (target && target.nodeType === 1 && target !== doc.documentElement && target !== body.parentNode) {
+        ES.select(target);
+      }
+    }, true);
+
+    // Double click to edit text
+    body.addEventListener('dblclick', (e) => {
+      if (isPreview) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const target = e.target;
+      if (target && target.nodeType === 1) {
+        enterTextEdit(target);
+      }
+    }, true);
+
+    // Hover highlight
+    body.addEventListener('mousemove', (e) => {
+      if (isPreview) return;
+      if (dragData) return;
+      const target = e.target;
+      if (target && target.nodeType === 1 && target !== ES.state.selected) {
+        showHoverBox(target);
+      } else {
+        hideHoverBox();
+      }
+    });
+    body.addEventListener('mouseleave', () => hideHoverBox());
+
+    // Internal drag-drop: drag elements to reorder
+    body.addEventListener('mousedown', (e) => {
+      if (isPreview) return;
+      if (!e.altKey && !e.shiftKey) return; // require modifier to start drag inside canvas
+    });
+
+    // Scroll: keep overlay in sync
+    doc.addEventListener('scroll', updateOverlay, true);
+
+    // dragover/drop inside iframe for blocks coming from sidebar
+    doc.addEventListener('dragover', (e) => {
+      if (!dragData) return;
+      e.preventDefault();
+      const rect = iframe.getBoundingClientRect();
+      updateDropTarget(rect.left + e.clientX, rect.top + e.clientY);
+    });
+    doc.addEventListener('drop', (e) => {
+      if (!dragData) return;
+      e.preventDefault();
+      const rect = iframe.getBoundingClientRect();
+      handleDrop(rect.left + e.clientX, rect.top + e.clientY);
+    });
+
+    // Track any DOM mutations for autosave (excluding our editor-style injections)
+    const mo = new MutationObserver((mutations) => {
+      // Ignore mutations involving our injected style tag
+      const meaningful = mutations.some(m => {
+        if (m.target && m.target.id === '__he_styles__') return false;
+        return true;
+      });
+      if (meaningful) {
+        ES.scheduleAutosave();
+        // Update overlay position if any layout changed
+        updateOverlay();
+      }
+    });
+    mo.observe(doc.documentElement, { childList: true, subtree: true, attributes: true, characterData: true });
+  }
+
+  function enterTextEdit(el) {
+    if (!hasTextContentOnly(el)) {
+      // For containers with children, click won't edit -- just select
+      ES.select(el);
+      return;
+    }
+    el.setAttribute('contenteditable', 'true');
+    el.dataset.heEditing = 'true';
+    el.focus();
+    const onBlur = () => {
+      el.removeAttribute('contenteditable');
+      delete el.dataset.heEditing;
+      ES.snapshot('edit text');
+      el.removeEventListener('blur', onBlur);
+    };
+    el.addEventListener('blur', onBlur);
+    // Place cursor at end
+    const range = document.createRange();
+    range.selectNodeContents(el);
+    range.collapse(false);
+    const sel = el.ownerDocument.defaultView.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+  }
+
+  function hasTextContentOnly(el) {
+    if (!el) return false;
+    for (const child of el.childNodes) {
+      if (child.nodeType === 1) return false; // element child = not text-only
+    }
+    return true;
+  }
+
+  function showHoverBox(el) {
+    const rect = relRect(el);
+    if (!rect) { hideHoverBox(); return; }
+    hoverBox.hidden = false;
+    Object.assign(hoverBox.style, {
+      left: rect.left + 'px',
+      top: rect.top + 'px',
+      width: rect.width + 'px',
+      height: rect.height + 'px',
+    });
+  }
+  function hideHoverBox() { hoverBox.hidden = true; }
+
+  function relRect(el) {
+    if (!el || !el.getBoundingClientRect) return null;
+    const r = el.getBoundingClientRect();          // iframe-local
+    const ifr = iframe.getBoundingClientRect();    // iframe in parent
+    const cf = canvasFrame.getBoundingClientRect();// canvas-frame in parent
+    return {
+      left: (ifr.left - cf.left) + r.left,
+      top: (ifr.top - cf.top) + r.top,
+      width: r.width,
+      height: r.height,
+    };
+  }
+
+  function updateOverlay() {
+    const sel = ES.state.selected;
+    if (!sel || isPreview) {
+      overlay.hidden = true;
+      return;
+    }
+    overlay.hidden = false;
+    const rect = relRect(sel);
+    if (!rect) {
+      overlay.hidden = true;
+      return;
+    }
+    Object.assign(selBox.style, {
+      left: rect.left + 'px',
+      top: rect.top + 'px',
+      width: rect.width + 'px',
+      height: rect.height + 'px',
+    });
+    const label = describe(sel);
+    selLabel.textContent = label;
+    selLabel.style.left = rect.left + 'px';
+    selLabel.style.top = (rect.top - 18) + 'px';
+    if (rect.top - 18 < 0) {
+      selLabel.style.top = (rect.top) + 'px';
+    }
+    // Toolbar above selection (or below if near top)
+    const tbTop = rect.top - 36;
+    selToolbar.style.left = Math.max(0, rect.left + rect.width - 140) + 'px';
+    selToolbar.style.top = (tbTop < 0 ? rect.top + rect.height + 6 : tbTop) + 'px';
+  }
+
+  function describe(el) {
+    let s = el.tagName.toLowerCase();
+    if (el.id) s += '#' + el.id;
+    if (el.classList && el.classList.length) s += '.' + Array.from(el.classList).slice(0, 2).join('.');
+    return s;
+  }
+
+  function handleToolbarAction(action) {
+    const sel = ES.state.selected;
+    if (!sel) return;
+    if (action === 'delete') deleteSelected();
+    else if (action === 'duplicate') duplicateSelected();
+    else if (action === 'parent') {
+      if (sel.parentElement && sel.parentElement !== ES.state.doc.documentElement) ES.select(sel.parentElement);
+    }
+    else if (action === 'move-up') moveSelected(-1);
+    else if (action === 'move-down') moveSelected(1);
+  }
+
+  function deleteSelected() {
+    const sel = ES.state.selected;
+    if (!sel || !sel.parentElement) return;
+    if (sel === ES.state.doc.body || sel === ES.state.doc.documentElement) return;
+    const next = sel.nextElementSibling || sel.previousElementSibling || sel.parentElement;
+    sel.remove();
+    ES.snapshot('delete');
+    if (next) ES.select(next);
+    else ES.deselect();
+  }
+
+  function duplicateSelected() {
+    const sel = ES.state.selected;
+    if (!sel || !sel.parentElement) return;
+    if (sel === ES.state.doc.body || sel === ES.state.doc.documentElement) return;
+    const clone = sel.cloneNode(true);
+    sel.parentElement.insertBefore(clone, sel.nextSibling);
+    ES.snapshot('duplicate');
+    ES.select(clone);
+  }
+
+  function moveSelected(dir) {
+    const sel = ES.state.selected;
+    if (!sel || !sel.parentElement) return;
+    if (dir < 0) {
+      const prev = sel.previousElementSibling;
+      if (prev) sel.parentElement.insertBefore(sel, prev);
+    } else {
+      const next = sel.nextElementSibling;
+      if (next) sel.parentElement.insertBefore(next, sel);
+    }
+    ES.snapshot('move');
+    updateOverlay();
+  }
+
+  // ---- Drop handling ----
+  let lastDropTarget = null; // { el, position: 'before'|'after'|'inside' }
+
+  function updateDropTarget(clientX, clientY) {
+    const doc = ES.state.doc;
+    if (!doc) return;
+    const fr = iframe.getBoundingClientRect();
+    const iframeX = clientX - fr.left;
+    const iframeY = clientY - fr.top;
+    if (iframeX < 0 || iframeY < 0 || iframeX > fr.width || iframeY > fr.height) {
+      // Outside iframe — try body
+      lastDropTarget = { el: doc.body, position: 'inside' };
+      showDropIndicator(doc.body, 'inside');
+      return;
+    }
+    const target = doc.elementFromPoint(iframeX, iframeY);
+    if (!target || target === doc.documentElement) {
+      lastDropTarget = { el: doc.body, position: 'inside' };
+      showDropIndicator(doc.body, 'inside');
+      return;
+    }
+    // Don't drop on the moving element itself
+    if (dragData && dragData.type === 'move' && dragData.element &&
+        (dragData.element === target || dragData.element.contains(target))) {
+      hideDropIndicator();
+      lastDropTarget = null;
+      return;
+    }
+    const rect = target.getBoundingClientRect();
+    const localY = iframeY - rect.top;
+    const localX = iframeX - rect.left;
+    let position;
+    if (canContain(target)) {
+      // Use thirds: top third = before, middle = inside, bottom = after
+      if (localY < rect.height / 3) position = 'before';
+      else if (localY > rect.height * 2 / 3) position = 'after';
+      else position = 'inside';
+    } else {
+      // Inline-ish — left or right half
+      position = localY < rect.height / 2 ? 'before' : 'after';
+    }
+    lastDropTarget = { el: target, position };
+    showDropIndicator(target, position);
+  }
+
+  function canContain(el) {
+    const tag = el.tagName.toLowerCase();
+    const voidTags = ['img','input','br','hr','meta','link','source','area','base','col','embed','param','track','wbr'];
+    if (voidTags.includes(tag)) return false;
+    return true;
+  }
+
+  function showDropIndicator(el, position) {
+    const rect = relRect(el);
+    if (!rect) { hideDropIndicator(); return; }
+    dropIndicator.hidden = false;
+    dropIndicator.classList.remove('vertical', 'inside');
+    if (position === 'inside') {
+      dropIndicator.classList.add('inside');
+      Object.assign(dropIndicator.style, {
+        left: rect.left + 'px',
+        top: rect.top + 'px',
+        width: rect.width + 'px',
+        height: rect.height + 'px',
+      });
+    } else if (position === 'before') {
+      Object.assign(dropIndicator.style, {
+        left: rect.left + 'px',
+        top: rect.top + 'px',
+        width: rect.width + 'px',
+        height: '2px',
+      });
+    } else {
+      Object.assign(dropIndicator.style, {
+        left: rect.left + 'px',
+        top: (rect.top + rect.height - 2) + 'px',
+        width: rect.width + 'px',
+        height: '2px',
+      });
+    }
+  }
+
+  function hideDropIndicator() { dropIndicator.hidden = true; }
+
+  function handleDrop(clientX, clientY) {
+    if (!dragData || !lastDropTarget) { clearDragData(); return; }
+    const doc = ES.state.doc;
+    const { el, position } = lastDropTarget;
+
+    let inserted = null;
+    if (dragData.type === 'block') {
+      const tpl = doc.createElement('template');
+      tpl.innerHTML = dragData.html.trim();
+      const frag = tpl.content;
+      inserted = frag.firstElementChild;
+      if (!inserted) { clearDragData(); return; }
+      insertElement(inserted, el, position);
+    } else if (dragData.type === 'move' && dragData.element) {
+      const moving = dragData.element;
+      if (moving === el || moving.contains(el)) { clearDragData(); return; }
+      insertElement(moving, el, position);
+      inserted = moving;
+    } else if (dragData.type === 'snippet') {
+      const tpl = doc.createElement('template');
+      tpl.innerHTML = dragData.html.trim();
+      const frag = tpl.content;
+      inserted = frag.firstElementChild;
+      if (!inserted) { clearDragData(); return; }
+      insertElement(inserted, el, position);
+    }
+    ES.snapshot('insert');
+    clearDragData();
+    if (inserted) ES.select(inserted);
+  }
+
+  function insertElement(node, target, position) {
+    if (position === 'before') {
+      target.parentElement.insertBefore(node, target);
+    } else if (position === 'after') {
+      target.parentElement.insertBefore(node, target.nextSibling);
+    } else {
+      target.appendChild(node);
+    }
+  }
+
+  function setPreview(p) {
+    isPreview = p;
+    if (p) {
+      hideHoverBox();
+      overlay.hidden = true;
+    } else {
+      updateOverlay();
+    }
+  }
+
+  function setDevice(d) {
+    canvasFrame.dataset.device = d;
+    requestAnimationFrame(updateOverlay);
+  }
+
+  return {
+    init, loadHtml, setDragData, clearDragData, getDragData, updateOverlay,
+    deleteSelected, duplicateSelected, moveSelected, setPreview, setDevice,
+    insertElement,
+  };
+})();

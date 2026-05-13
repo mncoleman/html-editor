@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HTML Editor</title>
+<link rel="stylesheet" href="css/editor.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%E2%9C%8F%EF%B8%8F%3C/text%3E%3C/svg%3E">
+</head>
+<body>
+
+<!-- Empty state when no document loaded -->
+<div id="empty-state" class="empty-state">
+  <div class="empty-inner">
+    <div class="logo">✏️</div>
+    <h1>HTML Editor</h1>
+    <p>Drop in an HTML file to start editing visually. Drag, drop, click to edit — and save back to your local file with live changes.</p>
+    <div class="empty-actions">
+      <button class="btn btn-primary" id="empty-open-local" title="Edit a file on your disk with live save">
+        <span class="icon">📁</span>
+        <span>Open Local File</span>
+        <small>Live link — saves to disk</small>
+      </button>
+      <button class="btn" id="empty-import">
+        <span class="icon">⬆️</span>
+        <span>Import HTML</span>
+        <small>Read-only file picker</small>
+      </button>
+      <button class="btn" id="empty-new">
+        <span class="icon">✨</span>
+        <span>Start Blank</span>
+        <small>Empty page</small>
+      </button>
+    </div>
+    <div class="empty-drop-hint">…or drop an .html file anywhere</div>
+    <div class="empty-shortcuts">
+      <kbd>⌘S</kbd> save · <kbd>⌘Z</kbd> undo · <kbd>⌘D</kbd> duplicate · <kbd>Delete</kbd> remove · <kbd>Esc</kbd> deselect
+    </div>
+    <div class="browser-warning" id="browser-warning" hidden>
+      Your browser doesn't support live local file editing (Safari/Firefox). Import/Export still works.
+    </div>
+  </div>
+</div>
+
+<!-- Main editor UI -->
+<div id="editor" class="editor" hidden>
+
+  <!-- Top toolbar -->
+  <header class="toolbar">
+    <div class="toolbar-left">
+      <div class="brand">✏️ <span>HTML Editor</span></div>
+      <div class="file-info">
+        <span id="file-name" class="file-name">untitled.html</span>
+        <span id="save-status" class="save-status" data-state="saved">Saved</span>
+      </div>
+    </div>
+
+    <div class="toolbar-center">
+      <button class="tool-btn" id="tb-undo" title="Undo (⌘Z)">↶</button>
+      <button class="tool-btn" id="tb-redo" title="Redo (⌘⇧Z)">↷</button>
+      <span class="divider"></span>
+      <button class="tool-btn" id="tb-duplicate" title="Duplicate (⌘D)">⧉</button>
+      <button class="tool-btn" id="tb-delete" title="Delete (⌫)">🗑</button>
+      <span class="divider"></span>
+      <button class="tool-btn" id="tb-move-up" title="Move up">↑</button>
+      <button class="tool-btn" id="tb-move-down" title="Move down">↓</button>
+      <button class="tool-btn" id="tb-parent" title="Select parent">⤴</button>
+      <span class="divider"></span>
+      <div class="device-toggle">
+        <button class="tool-btn device-btn active" data-device="desktop" title="Desktop">🖥</button>
+        <button class="tool-btn device-btn" data-device="tablet" title="Tablet">📱</button>
+        <button class="tool-btn device-btn" data-device="mobile" title="Mobile">📲</button>
+      </div>
+      <span class="divider"></span>
+      <button class="tool-btn" id="tb-preview" title="Toggle preview mode (P)">👁</button>
+    </div>
+
+    <div class="toolbar-right">
+      <button class="tool-btn" id="tb-open" title="Open local file">📁 Open</button>
+      <button class="tool-btn" id="tb-import" title="Import HTML">⬆ Import</button>
+      <button class="tool-btn" id="tb-export" title="Export HTML">⬇ Export</button>
+      <button class="tool-btn primary" id="tb-save" title="Save (⌘S)">💾 Save</button>
+      <button class="tool-btn icon-only" id="tb-theme" title="Toggle theme">🌙</button>
+    </div>
+  </header>
+
+  <!-- Body: 3-pane -->
+  <main class="workspace">
+
+    <!-- Left sidebar -->
+    <aside class="sidebar left-sidebar">
+      <nav class="sidebar-tabs">
+        <button class="tab active" data-tab="blocks">Blocks</button>
+        <button class="tab" data-tab="tree">Tree</button>
+        <button class="tab" data-tab="assets">Assets</button>
+      </nav>
+
+      <!-- Blocks tab -->
+      <div class="tab-panel active" data-panel="blocks">
+        <input type="search" id="blocks-search" class="search-input" placeholder="Search blocks…">
+        <div id="blocks-list" class="blocks-list"></div>
+      </div>
+
+      <!-- Tree tab -->
+      <div class="tab-panel" data-panel="tree">
+        <div id="dom-tree" class="dom-tree"></div>
+      </div>
+
+      <!-- Assets tab -->
+      <div class="tab-panel" data-panel="assets">
+        <div class="assets-section">
+          <h3>Snippets</h3>
+          <p class="hint">Saved blocks of your own</p>
+          <button class="btn-block" id="save-snippet" disabled>Save selection as snippet</button>
+          <div id="snippets-list" class="snippets-list"></div>
+        </div>
+        <div class="assets-section">
+          <h3>Recent files</h3>
+          <div id="recent-list" class="recent-list"></div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Canvas -->
+    <section class="canvas-wrap">
+      <div class="canvas-frame" data-device="desktop">
+        <iframe id="canvas" sandbox="allow-same-origin allow-scripts allow-forms" title="Canvas"></iframe>
+        <div class="selection-overlay" id="selection-overlay" hidden>
+          <div class="sel-box" id="sel-box"></div>
+          <div class="sel-label" id="sel-label"></div>
+          <div class="sel-toolbar" id="sel-toolbar">
+            <button data-action="move-up" title="Move up">↑</button>
+            <button data-action="move-down" title="Move down">↓</button>
+            <button data-action="parent" title="Select parent">⤴</button>
+            <button data-action="duplicate" title="Duplicate">⧉</button>
+            <button data-action="delete" title="Delete">🗑</button>
+          </div>
+          <div class="hover-box" id="hover-box" hidden></div>
+          <div class="drop-indicator" id="drop-indicator" hidden></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Right sidebar (properties) -->
+    <aside class="sidebar right-sidebar">
+      <nav class="sidebar-tabs">
+        <button class="tab active" data-tab="style">Style</button>
+        <button class="tab" data-tab="attrs">Attributes</button>
+        <button class="tab" data-tab="html">HTML</button>
+      </nav>
+
+      <div class="tab-panel active" data-panel="style">
+        <div id="props-style" class="props"></div>
+      </div>
+      <div class="tab-panel" data-panel="attrs">
+        <div id="props-attrs" class="props"></div>
+      </div>
+      <div class="tab-panel" data-panel="html">
+        <div id="props-html" class="props"></div>
+      </div>
+    </aside>
+  </main>
+
+  <!-- Status bar -->
+  <footer class="statusbar">
+    <span id="status-breadcrumbs" class="breadcrumbs"></span>
+    <span class="status-right">
+      <span id="status-message"></span>
+      <span class="autosave">Autosaved <span id="autosave-time">—</span></span>
+    </span>
+  </footer>
+
+</div>
+
+<!-- Hidden file inputs -->
+<input type="file" id="file-input" accept=".html,.htm" hidden>
+
+<!-- Toast container -->
+<div id="toasts" class="toasts"></div>
+
+<!-- Scripts -->
+<script src="js/state.js"></script>
+<script src="js/blocks.js"></script>
+<script src="js/canvas.js"></script>
+<script src="js/tree.js"></script>
+<script src="js/properties.js"></script>
+<script src="js/blocks-panel.js"></script>
+<script src="js/file.js"></script>
+<script src="js/keyboard.js"></script>
+<script src="js/editor.js"></script>
+
+</body>
+</html>
