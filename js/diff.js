@@ -116,7 +116,13 @@ window.DiffViewer = (function() {
     // Apply / save buttons exist only when not hidden
     const applyBtn = modal.querySelector('#diff-apply-disk');
     if (applyBtn) applyBtn.addEventListener('click', async () => {
-      if (!confirm('Discard your editor changes and load the disk version?')) return;
+      const ok = await window.Dialog.confirm({
+        title: 'Discard editor changes?',
+        message: 'The on-disk version will replace what you have in the editor.',
+        confirmLabel: 'Discard & load disk',
+        danger: true,
+      });
+      if (!ok) return;
       await window.FileOps.reloadFromDisk({ force: true });
       close();
     });

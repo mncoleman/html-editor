@@ -264,8 +264,13 @@ window.Properties = (function() {
     addBtn.className = 'tool-btn';
     addBtn.style.padding = '2px 8px';
     addBtn.textContent = '+ Add';
-    addBtn.addEventListener('click', () => {
-      const name = prompt('Attribute name:');
+    addBtn.addEventListener('click', async () => {
+      const name = await window.Dialog.prompt({
+        title: 'Add attribute',
+        message: 'Name of the HTML attribute (e.g. data-id, aria-label, role).',
+        placeholder: 'attribute name',
+        confirmLabel: 'Add',
+      });
       if (name) { el.setAttribute(name, ''); ES.snapshot('attr'); render(); }
     });
     ah.appendChild(addBtn);
@@ -360,7 +365,13 @@ window.Properties = (function() {
         el.replaceWith(repl);
         ES.snapshot('edit html');
         ES.select(repl);
-      } catch (e) { alert('Invalid HTML'); }
+      } catch (e) {
+        window.Dialog.alert({
+          title: 'Invalid HTML',
+          message: 'The markup couldn\'t be parsed. Check for unbalanced tags or stray characters.',
+          danger: true,
+        });
+      }
     });
     reset.addEventListener('click', () => { ta.value = formatHtml(el.outerHTML); });
     btnRow.appendChild(apply);

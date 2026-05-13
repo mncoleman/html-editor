@@ -1155,6 +1155,123 @@ body[data-mode="source"] .workspace { grid-template-columns: 1fr; }
   to { opacity: 1; transform: translateY(0); }
 }
 
+/* ---------- Custom dialogs (alert / confirm / prompt) ---------- */
+.dialog-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(6px);
+  display: grid;
+  place-items: center;
+  z-index: 11000;
+  padding: 24px;
+  animation: dialog-fade-in 0.16s ease-out;
+}
+.dialog-overlay.closing { animation: dialog-fade-out 0.14s ease-in forwards; }
+@keyframes dialog-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes dialog-fade-out {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+.dialog-panel {
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  width: min(440px, 100%);
+  padding: 22px 24px 20px;
+  box-shadow: 0 28px 64px -12px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.04);
+  animation: dialog-pop 0.18s cubic-bezier(.2,.7,.3,1.1);
+}
+@keyframes dialog-pop {
+  from { transform: scale(0.94) translateY(8px); opacity: 0; }
+  to   { transform: scale(1) translateY(0); opacity: 1; }
+}
+.dialog-head {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  margin-bottom: 18px;
+}
+.dialog-icon {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  background: var(--accent-soft);
+  color: var(--text);
+}
+.dialog-panel.danger .dialog-icon { background: rgba(239, 68, 68, 0.14); color: var(--danger); }
+.dialog-icon [data-lucide], .dialog-icon .lucide { width: 18px; height: 18px; }
+.dialog-titles { flex: 1; min-width: 0; }
+.dialog-title {
+  margin: 0 0 4px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: -0.01em;
+}
+.dialog-message {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text-dim);
+  white-space: pre-wrap;
+}
+.dialog-body { margin-bottom: 16px; }
+.dialog-input {
+  width: 100%;
+  padding: 9px 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.1s, box-shadow 0.1s;
+}
+.dialog-input:focus {
+  border-color: var(--selection);
+  box-shadow: 0 0 0 3px var(--selection-soft);
+}
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.dialog-btn {
+  padding: 8px 14px;
+  border-radius: 7px;
+  border: 1px solid var(--border);
+  background: var(--bg-3);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.1s;
+}
+.dialog-btn:hover { background: var(--bg-hover); }
+.dialog-btn:focus-visible {
+  outline: 2px solid var(--selection);
+  outline-offset: 2px;
+}
+.dialog-btn-primary {
+  background: var(--accent);
+  color: var(--accent-on);
+  border-color: var(--accent);
+}
+.dialog-btn-primary:hover { filter: brightness(0.92); }
+.dialog-btn-primary.danger {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: white;
+}
+.dialog-btn-secondary { background: transparent; }
+
 /* ---------- Diff modal ---------- */
 .diff-modal {
   position: fixed;
