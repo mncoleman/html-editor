@@ -12,6 +12,7 @@
     ES.loadTheme();
     ES.loadSnippets();
     ES.loadRecent();
+    document.body.dataset.mode = ES.state.mode || 'visual';
 
     // Wait one tick so the deferred lucide UMD has executed
     requestAnimationFrame(() => window.renderIcons());
@@ -27,6 +28,7 @@
     wireToolbar();
     wireTabs();
     wireStatusUpdates();
+    wireModeToggle();
 
     // Restore autosave if any
     const auto = ES.loadAutosave();
@@ -37,10 +39,11 @@
       restore.className = 'btn';
       restore.style.marginTop = '12px';
       restore.innerHTML = `<i data-lucide="history" class="icon"></i><span>Restore last session</span><small>${age} ago · ${escapeHtml(auto.name)}</small>`;
-      restore.addEventListener('click', () => {
+      restore.addEventListener('click', async () => {
         ES.setFile(null, auto.name);
+        ES.state.sourceHtml = auto.html;
         showEditor();
-        window.Canvas.loadHtml(auto.html);
+        await window.ModeSwitch.loadIntoInitialMode(auto.html);
       });
       const empty = document.querySelector('.empty-inner');
       const hint = document.querySelector('.empty-drop-hint');
@@ -61,9 +64,10 @@
       window.FileOps.newBlank();
       showEditor();
     });
-    // After import via drag-drop, switch to editor
+    // After any file load — visual (doc-changed) or source (mode-changed) — flip to editor
     ES.on((evt) => {
       if (evt === 'doc-changed' && ES.state.doc) showEditor();
+      if (evt === 'mode-changed') showEditor();
     });
   }
 
@@ -138,6 +142,42 @@
         tab.classList.add('active');
         sidebar.querySelector(`.tab-panel[data-panel="${tab.dataset.tab}"]`).classList.add('active');
       });
+    });
+  }
+
+  function wireModeToggle() {
+    const toggle = document.getElementById('mode-toggle');
+    toggle.addEventListener('click', async (e) => {
+      const btn = e.target.closest('.mode-btn');
+      if (!btn) return;
+      const target = btn.dataset.mode;
+      if (target === ES.state.mode) return;
+      await window.ModeSwitch.setMode(target);
+    });
+
+    ES.on((evt, payload) => {
+      if (evt === 'mode-changed') {
+        const mode = payload || ES.state.mode;
+        document.querySelectorAll('.mode-btn').forEach(b => {
+          b.classList.toggle('active', b.dataset.mode === mode);
+        });
+        const canvasWrap = document.getElementById('canvas-wrap');
+        const sourceWrap = document.getElementById('source-wrap');
+        const leftSidebar = document.querySelector('.left-sidebar');
+        const rightSidebar = document.querySelector('.right-sidebar');
+        if (mode === 'source') {
+          canvasWrap.hidden = true;
+          sourceWrap.hidden = false;
+          // Hide DOM-centric panels in source mode
+          leftSidebar.hidden = true;
+          rightSidebar.hidden = true;
+        } else {
+          canvasWrap.hidden = false;
+          sourceWrap.hidden = true;
+          leftSidebar.hidden = false;
+          rightSidebar.hidden = false;
+        }
+      }
     });
   }
 

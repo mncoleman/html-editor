@@ -11,10 +11,13 @@ window.EditorState = (function() {
     maxHistory: 50,
     listeners: new Set(),
     snippets: [],
-    recent: [],             // {name, handle} -- handles are stored in IndexedDB for File System Access API
+    recent: [],
     theme: 'dark',
     autosaveTimer: null,
     lastAutosave: null,
+    // --- Source-text mode foundation ---
+    mode: 'visual',         // 'visual' | 'source'
+    sourceHtml: '',         // canonical source string (kept in sync; Source mode edits this directly)
   };
 
   function emit(event, payload) {
@@ -137,13 +140,20 @@ window.EditorState = (function() {
     emit('file-changed');
   }
 
-  // Autosave to localStorage (every 2s after change)
+  // Autosave to localStorage (every 2s after change). Pulls from the
+  // canonical source in source mode, from the iframe DOM in visual mode.
   function scheduleAutosave() {
     if (state.autosaveTimer) clearTimeout(state.autosaveTimer);
     state.autosaveTimer = setTimeout(() => {
-      if (!state.doc) return;
       try {
-        const html = state.doc.documentElement.outerHTML;
+        let html;
+        if (state.mode === 'source') {
+          html = (window.Source && window.Source.getContent()) || state.sourceHtml || '';
+        } else {
+          if (!state.doc) return;
+          html = state.doc.documentElement.outerHTML;
+        }
+        if (!html) return;
         localStorage.setItem('html-editor.autosave', html);
         localStorage.setItem('html-editor.autosave.name', state.fileName);
         localStorage.setItem('html-editor.autosave.at', String(Date.now()));
