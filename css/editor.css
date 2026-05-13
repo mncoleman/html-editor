@@ -1414,19 +1414,64 @@ body[data-mode="source"] .workspace { grid-template-columns: 1fr; }
 html[data-theme="light"] .diff-body .diff-line.added { color: #15803d !important; }
 html[data-theme="light"] .diff-body .diff-line.removed { color: #b91c1c !important; }
 
-/* Split / side-by-side view */
+/* Split / side-by-side view: row-based grid where pairs of cells fill
+   two columns; gap rows span the full width via grid-column: 1 / -1.   */
 .diff-body.split { display: block; padding: 0; }
 .diff-split {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 0;
   min-height: 100%;
+  border-top: 1px solid var(--border);
 }
-.diff-col { border-right: 1px solid var(--border); overflow: hidden; }
-.diff-col:last-child { border-right: none; }
-.diff-col .diff-line { grid-template-columns: 48px 1fr; }
-.diff-col-old .diff-line.added { display: none; }
-.diff-col-new .diff-line.removed { display: none; }
+.diff-split > .diff-line {
+  grid-template-columns: 48px 24px 1fr;
+  padding-left: 0;
+  border-left: 3px solid transparent;
+  border-right: 1px solid var(--border);
+}
+.diff-split > .diff-line:nth-child(2n) { border-right: none; }
+
+/* Collapsed-region gap row — clickable to expand */
+.diff-gap {
+  background: var(--bg-3);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  margin: 0;
+}
+.diff-gap-full { grid-column: 1 / -1; }
+.diff-gap-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: transparent;
+  border: none;
+  color: var(--text-faint);
+  font-size: 11.5px;
+  font-family: var(--mono);
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+.diff-gap-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+.diff-gap-btn [data-lucide], .diff-gap-btn .lucide {
+  width: 14px;
+  height: 14px;
+  opacity: 0.7;
+}
+.diff-gap-btn:hover [data-lucide], .diff-gap-btn:hover .lucide { opacity: 1; }
+
+/* Collapse toggle button in header — distinct from view toggles */
+.diff-collapse-toggle.active {
+  background: var(--selection-soft);
+  border-color: var(--selection);
+  color: var(--selection);
+}
 
 /* Scrollbars */
 ::-webkit-scrollbar { width: 10px; height: 10px; }
