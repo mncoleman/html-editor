@@ -3,14 +3,9 @@
 window.ModeSwitch = (function() {
   const ES = window.EditorState;
 
-  // Heuristic for initial mode. Pick Source when the file is likely to be
-  // formatting-sensitive: contains executable script (means runtime state
-  // would otherwise leak), or is large enough that diff-noise from
-  // re-serialization would matter.
-  function pickInitialMode(text) {
-    if (!text) return 'visual';
-    if (/<script[\s>]/i.test(text)) return 'source';
-    if (text.length > 50000) return 'source';
+  // Always open in Visual mode. The user can toggle to Source via the pill
+  // when they want byte-for-byte fidelity.
+  function pickInitialMode(_text) {
     return 'visual';
   }
 
