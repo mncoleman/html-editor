@@ -179,17 +179,27 @@ window.GitDiff = (function() {
       return e;
     }
 
-    return {
-      promises: {
-        readFile, readdir, stat,
-        lstat: stat,
-        readlink: async () => { const e = new Error('ENOTSUP'); e.code = 'ENOTSUP'; throw e; },
-        writeFile: async () => { const e = new Error('EROFS'); e.code = 'EROFS'; throw e; },
-        unlink: async () => { const e = new Error('EROFS'); e.code = 'EROFS'; throw e; },
-        rmdir: async () => { const e = new Error('EROFS'); e.code = 'EROFS'; throw e; },
-        mkdir: async () => { const e = new Error('EROFS'); e.code = 'EROFS'; throw e; },
-      }
+    // isomorphic-git's FileSystem constructor .bind()s EVERY method up
+    // front, so missing methods (even ones we never plan to call) crash
+    // with "Cannot read properties of undefined (reading 'bind')".
+    // Provide read-only stubs for every method.
+    const enotsup = async () => { const e = new Error('ENOTSUP'); e.code = 'ENOTSUP'; throw e; };
+    const erofs   = async () => { const e = new Error('EROFS');   e.code = 'EROFS';   throw e; };
+    const promises = {
+      readFile,
+      readdir,
+      stat,
+      lstat: stat,
+      readlink: enotsup,
+      symlink:  erofs,
+      writeFile: erofs,
+      unlink:    erofs,
+      rmdir:     erofs,
+      mkdir:     erofs,
+      chmod:     erofs,
+      rename:    erofs,
     };
+    return { promises };
   }
 
   function toast(msg, type) {
