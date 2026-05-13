@@ -4,6 +4,10 @@ window.FileOps = (function() {
   const hasFSA = 'showOpenFilePicker' in window;
   const isSecure = window.isSecureContext;
   const supportsFSA = hasFSA && isSecure;
+  // mtime of the on-disk file the last time we read or wrote it. Used to
+  // detect external modifications when the editor regains focus.
+  let lastKnownMtime = null;
+  let externalChangePending = false;
 
   function init() {
     const warn = document.getElementById('browser-warning');
@@ -61,6 +65,8 @@ window.FileOps = (function() {
       const text = await file.text();
       ES.setFile(handle, file.name);
       ES.state.sourceHtml = text;
+      lastKnownMtime = file.lastModified;
+      clearExternalChange();
       await window.ModeSwitch.loadIntoInitialMode(text);
       ES.addRecent(file.name);
       toast(`Opened ${file.name} — changes will save to disk`, 'success');
@@ -115,6 +121,10 @@ window.FileOps = (function() {
         await writable.close();
         ES.state.sourceHtml = html;
         ES.setDirty(false);
+        // Refresh our mtime so the next external check doesn't fire on
+        // the write we just performed.
+        try { const f = await ES.state.fileHandle.getFile(); lastKnownMtime = f.lastModified; } catch (_) {}
+        clearExternalChange();
         status.dataset.state = 'saved';
         status.textContent = 'Saved';
         toast('Saved', 'success');
@@ -183,5 +193,91 @@ h1 { font-size: 32px; }
     setTimeout(() => t.remove(), 2800);
   }
 
-  return { init, openLocalFile, promptImport, importFile, save, exportFile, newBlank, supportsFSA };
+  // Re-read the file from disk and load it into the editor. Used by the
+  // refresh button and the focus-based external-change detector.
+  async function reloadFromDisk(opts = {}) {
+    if (!ES.state.fileHandle) {
+      toast('No linked file — open one with "Open Local File" first', 'warn');
+      return false;
+    }
+    try {
+      const file = await ES.state.fileHandle.getFile();
+      const text = await file.text();
+      lastKnownMtime = file.lastModified;
+
+      if (text === ES.state.sourceHtml) {
+        if (!opts.silent) toast('Already up to date', '');
+        clearExternalChange();
+        return false;
+      }
+
+      if (ES.state.dirty && !opts.force) {
+        const ok = confirm(
+          'The file changed on disk, and you have unsaved changes in the editor.\n\n' +
+          'Reload from disk and discard your changes?'
+        );
+        if (!ok) return false;
+      }
+
+      ES.state.sourceHtml = text;
+      if (ES.state.mode === 'source' && window.Source) {
+        window.Source.setContent(text);
+      } else {
+        window.Canvas.loadHtml(text);
+      }
+      ES.setDirty(false);
+      clearExternalChange();
+      toast('Reloaded from disk', 'success');
+      return true;
+    } catch (e) {
+      toast('Reload failed: ' + e.message, 'error');
+      return false;
+    }
+  }
+
+  // Cheap mtime poll — runs when the window regains focus / becomes
+  // visible. If disk-mtime > our last known mtime, mark the refresh
+  // button as having a pending update.
+  async function checkExternalChanges() {
+    if (!ES.state.fileHandle || lastKnownMtime == null) return;
+    try {
+      const file = await ES.state.fileHandle.getFile();
+      if (file.lastModified > lastKnownMtime) markExternalChange();
+    } catch (_) { /* permission may have been revoked */ }
+  }
+
+  function markExternalChange() {
+    if (externalChangePending) return;
+    externalChangePending = true;
+    const btn = document.getElementById('tb-refresh');
+    if (btn) {
+      btn.classList.add('has-update');
+      btn.title = 'File changed on disk — click to reload';
+    }
+    toast('File changed on disk — click ↻ to reload', 'warn');
+  }
+  function clearExternalChange() {
+    externalChangePending = false;
+    const btn = document.getElementById('tb-refresh');
+    if (btn) {
+      btn.classList.remove('has-update');
+      btn.title = 'Refresh from disk — pull in external changes';
+    }
+  }
+
+  // Wire up focus / visibility listeners
+  window.addEventListener('focus', () => checkExternalChanges());
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') checkExternalChanges();
+  });
+
+  // Keep the refresh button enabled state in sync with whether we have a handle
+  ES.on((evt) => {
+    if (evt === 'file-changed') {
+      const btn = document.getElementById('tb-refresh');
+      if (btn) btn.disabled = !ES.state.fileHandle;
+    }
+  });
+
+  return { init, openLocalFile, promptImport, importFile, save, exportFile, newBlank, reloadFromDisk, checkExternalChanges, supportsFSA };
 })();
