@@ -109,15 +109,16 @@ window.Canvas = (function() {
       }
     }, true);
 
-    // Double click to edit text
+    // Double click to edit text. If the target is already in an editable
+    // context, let the browser handle native word-selection — don't intercept.
     body.addEventListener('dblclick', (e) => {
       if (isPreview) return;
+      const target = e.target;
+      if (!target || target.nodeType !== 1) return;
+      if (target.isContentEditable) return; // already editing — native word-select handles it
       e.preventDefault();
       e.stopPropagation();
-      const target = e.target;
-      if (target && target.nodeType === 1) {
-        enterTextEdit(target);
-      }
+      enterTextEdit(target, e);
     }, true);
 
     // Hover highlight
@@ -172,9 +173,8 @@ window.Canvas = (function() {
     mo.observe(doc.documentElement, { childList: true, subtree: true, attributes: true, characterData: true });
   }
 
-  function enterTextEdit(el) {
+  function enterTextEdit(el, mouseEvent) {
     if (!hasTextContentOnly(el)) {
-      // For containers with children, click won't edit -- just select
       ES.select(el);
       return;
     }
@@ -188,13 +188,43 @@ window.Canvas = (function() {
       el.removeEventListener('blur', onBlur);
     };
     el.addEventListener('blur', onBlur);
-    // Place cursor at end
-    const range = document.createRange();
-    range.selectNodeContents(el);
-    range.collapse(false);
-    const sel = el.ownerDocument.defaultView.getSelection();
+
+    const doc = el.ownerDocument;
+    const win = doc.defaultView;
+    const sel = win.getSelection();
     sel.removeAllRanges();
-    sel.addRange(range);
+
+    // Try to place the caret at the click point and expand to the surrounding
+    // word (mimics native double-click-to-select behavior).
+    let placedAtClick = false;
+    if (mouseEvent) {
+      const x = mouseEvent.clientX, y = mouseEvent.clientY;
+      let range = null;
+      if (typeof doc.caretRangeFromPoint === 'function') {
+        range = doc.caretRangeFromPoint(x, y);
+      } else if (typeof doc.caretPositionFromPoint === 'function') {
+        const pos = doc.caretPositionFromPoint(x, y);
+        if (pos) {
+          range = doc.createRange();
+          range.setStart(pos.offsetNode, pos.offset);
+          range.collapse(true);
+        }
+      }
+      if (range && el.contains(range.startContainer)) {
+        sel.addRange(range);
+        try {
+          sel.modify('move', 'backward', 'word');
+          sel.modify('extend', 'forward', 'word');
+        } catch (_) { /* Firefox/Safari may not support modify; caret stays where it is */ }
+        placedAtClick = true;
+      }
+    }
+    if (!placedAtClick) {
+      const range = doc.createRange();
+      range.selectNodeContents(el);
+      range.collapse(false);
+      sel.addRange(range);
+    }
   }
 
   function hasTextContentOnly(el) {
