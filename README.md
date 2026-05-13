@@ -70,6 +70,10 @@ js/keyboard.js          — global shortcuts
 js/editor.js            — bootstrap, toolbar wiring, empty state
 ```
 
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, project layout, and how to add new blocks / shortcuts / style controls.
+
 ## License
 
-MIT
+[MIT](LICENSE) © 2026 mncoleman
