@@ -178,8 +178,15 @@ window.Canvas = (function() {
       if (!e.altKey && !e.shiftKey) return; // require modifier to start drag inside canvas
     });
 
-    // Scroll: keep overlay in sync
-    doc.addEventListener('scroll', updateOverlay, true);
+    // Scroll: re-sync the selection overlay, and CLEAR the hover box
+    // (otherwise it sits stale at the old position while the underlying
+    // element has scrolled out from under it — looks like the box is
+    // "moving" while the mouse is still).
+    doc.addEventListener('scroll', () => {
+      updateOverlay();
+      hideHoverBox();
+      lastHoverTarget = null;
+    }, true);
 
     // dragover/drop inside iframe for blocks coming from sidebar
     doc.addEventListener('dragover', (e) => {

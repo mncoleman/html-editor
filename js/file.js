@@ -212,10 +212,13 @@ h1 { font-size: 32px; }
       }
 
       if (ES.state.dirty && !opts.force) {
-        const ok = confirm(
-          'The file changed on disk, and you have unsaved changes in the editor.\n\n' +
-          'Reload from disk and discard your changes?'
-        );
+        const ok = await window.Dialog.confirm({
+          title: 'File changed on disk',
+          message: 'You have unsaved changes in the editor. Reload from disk and discard them?',
+          confirmLabel: 'Discard & reload',
+          cancelLabel: 'Keep my changes',
+          danger: true,
+        });
         if (!ok) return false;
       }
 

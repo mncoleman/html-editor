@@ -21,10 +21,16 @@ window.BlocksPanel = (function() {
       }
     });
 
-    saveSnippetBtn.addEventListener('click', () => {
+    saveSnippetBtn.addEventListener('click', async () => {
       const sel = ES.state.selected;
       if (!sel) return;
-      const name = prompt('Snippet name:', sel.tagName.toLowerCase());
+      const name = await window.Dialog.prompt({
+        title: 'Save selection as snippet',
+        message: 'Give your snippet a name. It\'ll appear in the Assets tab.',
+        defaultValue: sel.tagName.toLowerCase(),
+        placeholder: 'snippet name',
+        confirmLabel: 'Save',
+      });
       if (!name) return;
       ES.addSnippet(name, sel.outerHTML);
       toast('Snippet saved', 'success');
@@ -101,9 +107,15 @@ window.BlocksPanel = (function() {
       const del = document.createElement('button');
       del.textContent = '×';
       del.title = 'Delete snippet';
-      del.addEventListener('click', (e) => {
+      del.addEventListener('click', async (e) => {
         e.stopPropagation();
-        if (confirm(`Delete snippet "${s.name}"?`)) ES.removeSnippet(s.id);
+        const ok = await window.Dialog.confirm({
+          title: `Delete snippet "${s.name}"?`,
+          message: 'This can\'t be undone.',
+          confirmLabel: 'Delete',
+          danger: true,
+        });
+        if (ok) ES.removeSnippet(s.id);
       });
       item.appendChild(name);
       item.appendChild(del);

@@ -22,10 +22,11 @@ window.GitDiff = (function() {
     }
     let info = cache.get(ES.state.fileHandle);
     if (!info) {
-      const ok = confirm(
-        'To diff against git HEAD, pick the repo root directory in the next picker.\n' +
-        '(This stays per-file for the session — no network upload, all parsing happens in your browser.)'
-      );
+      const ok = await window.Dialog.confirm({
+        title: 'Diff vs. git HEAD',
+        message: 'Pick your repo root directory in the next picker. Cached per file for this session — no network upload, all parsing happens in your browser.',
+        confirmLabel: 'Pick directory',
+      });
       if (!ok) return;
       try {
         const dirHandle = await window.showDirectoryPicker({ mode: 'read' });
