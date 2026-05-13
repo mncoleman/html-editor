@@ -49,6 +49,135 @@ html[data-theme="light"] {
 /* Honor [hidden] even on grid/flex containers */
 [hidden] { display: none !important; }
 
+/* ---------- Icons (Lucide) ---------- */
+[data-lucide], .lucide {
+  width: 16px;
+  height: 16px;
+  stroke-width: 1.75;
+  stroke: currentColor;
+  fill: none;
+  flex-shrink: 0;
+  display: inline-block;
+  vertical-align: middle;
+  transition: transform 0.18s cubic-bezier(.2,.7,.3,1), opacity 0.18s;
+}
+.empty-actions .btn [data-lucide],
+.empty-actions .btn .lucide { width: 22px; height: 22px; stroke-width: 1.6; }
+.empty-actions .btn:hover [data-lucide],
+.empty-actions .btn:hover .lucide { transform: scale(1.08) translateY(-1px); }
+
+.empty-logo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 14px;
+  background: var(--text);
+  color: var(--bg);
+  margin-bottom: 20px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.25);
+}
+.empty-logo [data-lucide], .empty-logo .lucide {
+  width: 28px; height: 28px; stroke-width: 2;
+  animation: logo-float 4s ease-in-out infinite;
+}
+@keyframes logo-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+
+.hint-icon { width: 14px !important; height: 14px !important; margin-right: 4px; opacity: 0.6; }
+
+/* Tool button icon hover */
+.tool-btn .lucide,
+.tool-btn [data-lucide] { width: 15px; height: 15px; }
+.tool-btn.icon-only { padding: 6px 8px; }
+.tool-btn:hover [data-lucide],
+.tool-btn:hover .lucide { transform: scale(1.08); }
+.tool-btn:active [data-lucide],
+.tool-btn:active .lucide { transform: scale(0.92); }
+.tool-btn.primary [data-lucide],
+.tool-btn.primary .lucide { stroke-width: 2; }
+
+/* Press animation (subtle bounce on click) */
+.anim-press:active [data-lucide],
+.anim-press:active .lucide { animation: press-bounce 0.25s ease; }
+@keyframes press-bounce {
+  0% { transform: scale(0.85); }
+  60% { transform: scale(1.12); }
+  100% { transform: scale(1); }
+}
+
+/* Delete: subtle shake on hover */
+.anim-shake:hover [data-lucide],
+.anim-shake:hover .lucide {
+  animation: shake-wiggle 0.5s ease;
+  color: var(--danger);
+}
+@keyframes shake-wiggle {
+  0%, 100% { transform: rotate(0); }
+  25% { transform: rotate(-7deg); }
+  75% { transform: rotate(7deg); }
+}
+
+/* Eye blink */
+.anim-blink:hover [data-lucide],
+.anim-blink:hover .lucide { animation: blink 0.6s ease; }
+@keyframes blink {
+  0%, 100% { transform: scaleY(1); }
+  50% { transform: scaleY(0.1); }
+}
+
+/* Theme toggle — sun/moon crossfade like mncoleman.com */
+.theme-toggle {
+  position: relative;
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.theme-toggle [data-lucide], .theme-toggle .lucide {
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  transition: transform 0.4s cubic-bezier(.2,.7,.3,1), opacity 0.3s;
+}
+.theme-toggle .th-sun { transform: rotate(0) scale(1); opacity: 1; }
+.theme-toggle .th-moon { transform: rotate(90deg) scale(0); opacity: 0; }
+html[data-theme="dark"] .theme-toggle .th-sun { transform: rotate(-90deg) scale(0); opacity: 0; }
+html[data-theme="dark"] .theme-toggle .th-moon { transform: rotate(0) scale(1); opacity: 1; }
+
+/* Block tile icons (when they're lucide) */
+.block-item [data-lucide], .block-item .lucide {
+  width: 20px; height: 20px; stroke-width: 1.6;
+}
+.block-item:hover [data-lucide], .block-item:hover .lucide {
+  transform: scale(1.08) rotate(-2deg);
+  color: var(--text);
+}
+
+/* Sidebar tab icons (if used) */
+.tab [data-lucide], .tab .lucide { width: 14px; height: 14px; margin-right: 4px; }
+
+/* Selection toolbar buttons */
+.sel-toolbar button [data-lucide], .sel-toolbar button .lucide { width: 14px; height: 14px; }
+.sel-toolbar button:hover [data-lucide], .sel-toolbar button:hover .lucide { transform: scale(1.1); }
+
+/* Save button: pulse when dirty (data attribute on body) */
+body[data-dirty="true"] #tb-save [data-lucide],
+body[data-dirty="true"] #tb-save .lucide {
+  animation: dirty-pulse 1.8s ease-in-out infinite;
+}
+@keyframes dirty-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.12); }
+}
+
+/* Status bar/recent icons */
+.recent-item [data-lucide], .snippet-item [data-lucide] { width: 12px; height: 12px; opacity: 0.6; }
+
 * { box-sizing: border-box; }
 html, body { height: 100%; margin: 0; padding: 0; }
 body {

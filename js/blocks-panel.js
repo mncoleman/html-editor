@@ -50,13 +50,14 @@ window.BlocksPanel = (function() {
       }
       listEl.appendChild(blockTile(b));
     }
+    if (window.renderIcons) window.renderIcons();
   }
 
   function blockTile(b) {
     const el = document.createElement('div');
     el.className = 'block-item';
     el.draggable = true;
-    el.innerHTML = `<div class="block-icon">${b.icon}</div><div class="block-name">${b.name}</div>`;
+    el.innerHTML = `<div class="block-icon"><i data-lucide="${b.icon}"></i></div><div class="block-name">${b.name}</div>`;
     el.title = b.name;
     el.addEventListener('dragstart', (e) => {
       window.Canvas.setDragData({ type: 'block', html: b.html, name: b.name });
