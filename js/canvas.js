@@ -282,14 +282,28 @@ window.Canvas = (function() {
     const label = describe(sel);
     selLabel.textContent = label;
     selLabel.style.left = rect.left + 'px';
-    selLabel.style.top = (rect.top - 18) + 'px';
-    if (rect.top - 18 < 0) {
-      selLabel.style.top = (rect.top) + 'px';
+    selLabel.style.top = (rect.top - 22) + 'px';
+    if (rect.top - 22 < 0) {
+      selLabel.style.top = rect.top + 'px';
     }
-    // Toolbar above selection (or below if near top)
-    const tbTop = rect.top - 36;
-    selToolbar.style.left = Math.max(0, rect.left + rect.width - 140) + 'px';
-    selToolbar.style.top = (tbTop < 0 ? rect.top + rect.height + 6 : tbTop) + 'px';
+
+    // Context class — adds table/list helper buttons to the toolbar
+    const ctx = selectionContext(sel);
+    selToolbar.classList.toggle('ctx-table', ctx === 'table');
+    selToolbar.classList.toggle('ctx-list', ctx === 'list');
+
+    // Toolbar above selection (or below if near top); clamp horizontally
+    requestAnimationFrame(() => {
+      const tbRect = selToolbar.getBoundingClientRect();
+      const tbW = tbRect.width || 200;
+      const tbH = tbRect.height || 32;
+      const frameRect = canvasFrame.getBoundingClientRect();
+      const tbTop = rect.top - tbH - 8;
+      const useBelow = tbTop < 0;
+      const left = Math.max(4, Math.min(rect.left + rect.width - tbW, frameRect.width - tbW - 4));
+      selToolbar.style.left = left + 'px';
+      selToolbar.style.top = (useBelow ? rect.top + rect.height + 6 : tbTop) + 'px';
+    });
   }
 
   function describe(el) {
@@ -309,6 +323,91 @@ window.Canvas = (function() {
     }
     else if (action === 'move-up') moveSelected(-1);
     else if (action === 'move-down') moveSelected(1);
+    else if (action === 'row-before') tableAddRow(sel, false);
+    else if (action === 'row-after')  tableAddRow(sel, true);
+    else if (action === 'col-before') tableAddCol(sel, false);
+    else if (action === 'col-after')  tableAddCol(sel, true);
+    else if (action === 'row-delete') tableDeleteRow(sel);
+    else if (action === 'col-delete') tableDeleteCol(sel);
+    else if (action === 'li-before')  listAddItem(sel, false);
+    else if (action === 'li-after')   listAddItem(sel, true);
+  }
+
+  // ---- Table helpers ----
+  function findRow(el) { return el && el.closest && el.closest('tr'); }
+  function findTable(el) { return el && el.closest && el.closest('table'); }
+  function cellIndex(td) {
+    // td.cellIndex exists for table cells; fall back to childIndex
+    if (typeof td.cellIndex === 'number' && td.cellIndex >= 0) return td.cellIndex;
+    return Array.prototype.indexOf.call(td.parentElement.children, td);
+  }
+  function tableAddRow(el, after) {
+    const tr = findRow(el) || (findTable(el) && findTable(el).querySelector('tr'));
+    if (!tr) return;
+    const newRow = tr.cloneNode(true);
+    Array.from(newRow.children).forEach(c => { c.textContent = ''; });
+    if (after) tr.parentNode.insertBefore(newRow, tr.nextSibling);
+    else tr.parentNode.insertBefore(newRow, tr);
+    ES.snapshot('add row');
+    ES.select(newRow.children[0] || newRow);
+  }
+  function tableAddCol(el, after) {
+    const table = findTable(el);
+    if (!table) return;
+    let idx = 0;
+    if (el.tagName === 'TD' || el.tagName === 'TH') idx = cellIndex(el);
+    const rows = table.querySelectorAll('tr');
+    rows.forEach(row => {
+      const ref = row.children[idx];
+      if (!ref) {
+        const cell = ES.state.doc.createElement(row.parentElement && row.parentElement.tagName === 'THEAD' ? 'th' : 'td');
+        row.appendChild(cell);
+        return;
+      }
+      const cell = ref.cloneNode(false);
+      cell.textContent = '';
+      if (after) row.insertBefore(cell, ref.nextSibling);
+      else row.insertBefore(cell, ref);
+    });
+    ES.snapshot('add column');
+  }
+  function tableDeleteRow(el) {
+    const tr = findRow(el);
+    if (!tr) return;
+    const next = tr.nextElementSibling || tr.previousElementSibling;
+    tr.remove();
+    ES.snapshot('delete row');
+    if (next && next.children[0]) ES.select(next.children[0]);
+    else ES.deselect();
+  }
+  function tableDeleteCol(el) {
+    const table = findTable(el);
+    if (!table || (el.tagName !== 'TD' && el.tagName !== 'TH')) return;
+    const idx = cellIndex(el);
+    table.querySelectorAll('tr').forEach(row => {
+      if (row.children[idx]) row.children[idx].remove();
+    });
+    ES.snapshot('delete column');
+    ES.deselect();
+  }
+
+  // ---- List helpers ----
+  function listAddItem(el, after) {
+    const li = el.closest && el.closest('li');
+    if (!li) return;
+    const newLi = li.cloneNode(true);
+    newLi.textContent = 'Item';
+    if (after) li.parentNode.insertBefore(newLi, li.nextSibling);
+    else li.parentNode.insertBefore(newLi, li);
+    ES.snapshot('add list item');
+    ES.select(newLi);
+  }
+
+  function selectionContext(el) {
+    if (!el) return null;
+    if (el.closest && el.closest('table')) return 'table';
+    if (el.closest && el.closest('ul, ol')) return 'list';
+    return null;
   }
 
   function deleteSelected() {
