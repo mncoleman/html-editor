@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0a0a0a"/>
+      <stop offset="100%" stop-color="#1a1a1a"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="50%" cy="35%" r="60%">
+      <stop offset="0%" stop-color="rgba(255,255,255,0.08)"/>
+      <stop offset="100%" stop-color="rgba(255,255,255,0)"/>
+    </radialGradient>
+  </defs>
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <rect width="1200" height="630" fill="url(#glow)"/>
+
+  <!-- Logo mark -->
+  <rect x="80" y="80" width="88" height="88" rx="18" fill="#fafafa"/>
+  <text x="124" y="142" font-family="Inter, -apple-system, system-ui, sans-serif" font-size="52" font-weight="700" fill="#0a0a0a" text-anchor="middle">H</text>
+
+  <!-- Wordmark -->
+  <text x="190" y="138" font-family="Inter, -apple-system, system-ui, sans-serif" font-size="32" font-weight="500" fill="#fafafa">HTML Editor</text>
+
+  <!-- Headline -->
+  <text x="80" y="320" font-family="Inter, -apple-system, system-ui, sans-serif" font-size="76" font-weight="700" fill="#fafafa" letter-spacing="-2">Interactive HTML Editor</text>
+  <text x="80" y="404" font-family="Inter, -apple-system, system-ui, sans-serif" font-size="76" font-weight="200" fill="#fafafa" letter-spacing="-2">&amp; Renderer</text>
+
+  <!-- Subhead -->
+  <text x="80" y="480" font-family="Inter, -apple-system, system-ui, sans-serif" font-size="28" font-weight="400" fill="#a0a0a0">Free visual HTML editor in your browser.</text>
+  <text x="80" y="518" font-family="Inter, -apple-system, system-ui, sans-serif" font-size="28" font-weight="400" fill="#a0a0a0">Drag, drop, edit — save live to disk.</text>
+
+  <!-- URL chip -->
+  <rect x="80" y="552" width="320" height="40" rx="8" fill="rgba(255,255,255,0.08)" stroke="rgba(255,255,255,0.16)"/>
+  <text x="240" y="579" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="18" font-weight="500" fill="#fafafa" text-anchor="middle">html.mncoleman.com</text>
+
+  <!-- Decorative code corners -->
+  <text x="1080" y="200" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="28" fill="rgba(255,255,255,0.18)" text-anchor="end">&lt;/&gt;</text>
+  <text x="1120" y="560" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="20" fill="rgba(255,255,255,0.12)" text-anchor="end">⌘S</text>
+</svg>
