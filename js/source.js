@@ -11,11 +11,11 @@ window.Source = (function() {
     initPromise = (async () => {
       host = document.getElementById('source-pane');
       try {
-        const cm = await import('https://esm.sh/codemirror@6.0.1');
-        const lang = await import('https://esm.sh/@codemirror/lang-html@6.4.9');
-        const dark = await import('https://esm.sh/@codemirror/theme-one-dark@6.1.2');
-        const state = await import('https://esm.sh/@codemirror/state@6.4.1');
-        const cmview = await import('https://esm.sh/@codemirror/view@6.26.3');
+        const cm = await import('codemirror');
+        const lang = await import('@codemirror/lang-html');
+        const dark = await import('@codemirror/theme-one-dark');
+        const state = await import('@codemirror/state');
+        const cmview = await import('@codemirror/view');
 
         view = new cm.EditorView({
           doc: ES.state.sourceHtml || '',
