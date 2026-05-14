@@ -142,9 +142,7 @@ window.FileOps = (function() {
         const status = document.getElementById('save-status');
         status.dataset.state = 'saving';
         status.textContent = 'Saving…';
-        const writable = await ES.state.fileHandle.createWritable();
-        await writable.write(html);
-        await writable.close();
+        await writeWithPermissionRecovery(ES.state.fileHandle, html);
         ES.state.sourceHtml = html;
         ES.setDirty(false);
         // Refresh our mtime so the next external check doesn't fire on
@@ -178,6 +176,34 @@ window.FileOps = (function() {
     ES.state.sourceHtml = html;
     ES.setDirty(false);
     toast('Exported ' + a.download, 'success');
+  }
+
+  // Write through the FSA handle. If the browser denies writes
+  // (NotAllowedError / SecurityError — typically because the user
+  // revoked permission via the page-info menu mid-session), re-request
+  // permission and retry once. Surface a clear error if they deny.
+  async function writeWithPermissionRecovery(handle, html) {
+    try {
+      const writable = await handle.createWritable();
+      await writable.write(html);
+      await writable.close();
+      return;
+    } catch (e) {
+      const isPermission =
+        e && (e.name === 'NotAllowedError' || e.name === 'SecurityError'
+          || (typeof e.message === 'string' && /permission|not allowed/i.test(e.message)));
+      if (!isPermission || typeof handle.requestPermission !== 'function') throw e;
+
+      const granted = await handle.requestPermission({ mode: 'readwrite' });
+      if (granted !== 'granted') {
+        const err = new Error('Write permission denied — re-grant access via the page-info icon in the address bar');
+        err.cause = e;
+        throw err;
+      }
+      const writable = await handle.createWritable();
+      await writable.write(html);
+      await writable.close();
+    }
   }
 
   function stripEditorTraces(html) {
