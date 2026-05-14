@@ -113,6 +113,32 @@ window.FileOps = (function() {
     if (!html) return;
     if (ES.state.fileHandle) {
       try {
+        // Pre-write conflict check: if the on-disk mtime is newer than
+        // the last time we read or wrote, an external edit happened
+        // since the editor last synced. Confirm before clobbering.
+        try {
+          const pre = await ES.state.fileHandle.getFile();
+          if (lastKnownMtime != null && pre.lastModified > lastKnownMtime) {
+            const overwrite = await window.Dialog.confirm({
+              title: 'File changed on disk',
+              message:
+                'Someone (or something) modified this file since you last read it. ' +
+                'Saving now will overwrite those external changes.\n\n' +
+                'Overwrite anyway, or cancel and use ↻ Refresh to see the disk version first?',
+              confirmLabel: 'Overwrite disk',
+              cancelLabel: 'Cancel',
+              danger: true,
+            });
+            if (!overwrite) {
+              markExternalChange();
+              const s = document.getElementById('save-status');
+              s.dataset.state = 'dirty';
+              s.textContent = '● Unsaved';
+              return;
+            }
+          }
+        } catch (_) { /* fall through to write; the write itself will surface real errors */ }
+
         const status = document.getElementById('save-status');
         status.dataset.state = 'saving';
         status.textContent = 'Saving…';
