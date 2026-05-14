@@ -202,18 +202,22 @@ window.Canvas = (function() {
       handleDrop(rect.left + e.clientX, rect.top + e.clientY);
     });
 
-    // Track any DOM mutations for autosave (excluding our editor-style injections)
+    // Track any DOM mutations for autosave (excluding our editor-style
+    // injections). The observer can fire many times per frame for big
+    // changes (drops, undo restoring a tree, large style edits); coalesce
+    // the overlay/autosave work into a single rAF callback per frame.
+    let moPending = false;
     const mo = new MutationObserver((mutations) => {
-      // Ignore mutations involving our injected style tag
-      const meaningful = mutations.some(m => {
-        if (m.target && m.target.id === '__he_styles__') return false;
-        return true;
-      });
-      if (meaningful) {
+      const meaningful = mutations.some(m =>
+        !(m.target && m.target.id === '__he_styles__')
+      );
+      if (!meaningful || moPending) return;
+      moPending = true;
+      requestAnimationFrame(() => {
+        moPending = false;
         ES.scheduleAutosave();
-        // Update overlay position if any layout changed
         updateOverlay();
-      }
+      });
     });
     mo.observe(doc.documentElement, { childList: true, subtree: true, attributes: true, characterData: true });
   }
