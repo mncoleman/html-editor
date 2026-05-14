@@ -3,7 +3,126 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>HTML Editor</title>
+<title>Interactive HTML Editor & Renderer — Free Visual HTML Editor in Your Browser</title>
+<meta name="description" content="Free interactive HTML editor and renderer. Drop in any .html file, edit visually with drag-and-drop, and save back to disk live — no signup, no upload, runs entirely in your browser.">
+<meta name="keywords" content="interactive html editor, html renderer, online html editor, visual html editor, browser html editor, free html editor, drag and drop html editor, live html editor, edit html online, wysiwyg html editor, html preview tool, html sandbox, code editor, web page editor">
+<meta name="author" content="mncoleman">
+<meta name="robots" content="index, follow, max-image-preview:large">
+<meta name="theme-color" content="#0a0a0a">
+<link rel="canonical" href="https://html.mncoleman.com/">
+
+<!-- Open Graph -->
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://html.mncoleman.com/">
+<meta property="og:title" content="Interactive HTML Editor & Renderer — Free Visual HTML Editor in Your Browser">
+<meta property="og:description" content="Drop in any .html file and edit it visually — drag-and-drop blocks, live preview, save back to disk. 100% free, runs entirely in your browser.">
+<meta property="og:image" content="https://html.mncoleman.com/og-image.png">
+<meta property="og:image:type" content="image/png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Interactive HTML Editor & Renderer — free visual HTML editor in your browser">
+<meta property="og:site_name" content="HTML Editor">
+<meta property="og:locale" content="en_US">
+
+<!-- Twitter -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Interactive HTML Editor & Renderer">
+<meta name="twitter:description" content="Free visual HTML editor in your browser. Drag, drop, edit, and save back to disk — no signup.">
+<meta name="twitter:image" content="https://html.mncoleman.com/og-image.png">
+
+<!-- JSON-LD: SoftwareApplication -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "HTML Editor",
+  "alternateName": ["Interactive HTML Editor", "Visual HTML Renderer", "Online HTML Editor"],
+  "url": "https://html.mncoleman.com/",
+  "description": "Free interactive HTML editor and renderer that runs entirely in your browser. Drop in any .html file, edit it visually with drag-and-drop, and save back to your local disk live — no signup, no upload, no server.",
+  "applicationCategory": "DeveloperApplication",
+  "applicationSubCategory": "HTML Editor",
+  "operatingSystem": "Any (Web Browser)",
+  "browserRequirements": "Requires a modern browser. Live local file editing requires Chrome, Edge, or Arc (File System Access API).",
+  "offers": {
+    "@type": "Offer",
+    "price": "0",
+    "priceCurrency": "USD"
+  },
+  "creator": {
+    "@type": "Person",
+    "name": "Matthew Coleman",
+    "url": "https://mncoleman.com/"
+  },
+  "softwareVersion": "1.0",
+  "license": "https://opensource.org/licenses/MIT",
+  "featureList": [
+    "Visual drag-and-drop HTML editing",
+    "Live local file editing via File System Access API",
+    "40+ pre-built component blocks",
+    "DOM tree navigation panel",
+    "Visual style, attribute, and raw HTML editors",
+    "Inline text editing with double-click",
+    "Undo/redo with full document snapshots",
+    "Autosave to localStorage",
+    "Reusable snippets",
+    "Device preview (desktop / tablet / mobile)",
+    "Dark and light themes",
+    "Diff vs. disk and diff vs. git HEAD",
+    "Source-code mode with CodeMirror"
+  ]
+}
+</script>
+
+<!-- JSON-LD: FAQ -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "What is an interactive HTML editor?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "An interactive HTML editor lets you edit a web page visually — clicking elements, dragging blocks, and changing styles — instead of writing raw HTML by hand. This editor runs entirely in your browser, renders your HTML live, and saves changes back to your local file."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Is this HTML editor free?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Yes. It is 100% free, open source (MIT license), with no signup, no upload, and no server. Your files never leave your computer."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Which browsers support live local file editing?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Live local file editing uses the File System Access API, supported by Chrome, Edge, Arc, and other Chromium-based browsers. Safari and Firefox fall back to import/export."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Can I edit HTML without writing code?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Yes. Click any element to select it, drag blocks from the sidebar to add new content, double-click text to edit it inline, and use the properties panel to change typography, layout, spacing, background, borders, and effects — no code required."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "How is this different from VS Code or a plain text editor?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Plain text editors show you code. This is a visual HTML editor and renderer — it shows you the rendered page and lets you edit it directly, more like Webflow or Pinegrow but free and browser-based. You can still drop into a source-code mode (CodeMirror) when you want byte-level control."
+      }
+    }
+  ]
+}
+</script>
+
 <link rel="stylesheet" href="css/editor.css">
 <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js" defer></script>
 <!-- Importmap for lazy-loaded ESM modules. Pinned versions + SRI on the
@@ -40,8 +159,8 @@
 <div id="empty-state" class="empty-state">
   <div class="empty-inner">
     <div class="empty-logo"><i data-lucide="code-2"></i></div>
-    <h1><strong>HTML</strong> Editor</h1>
-    <p>Drop in an HTML file to start editing visually. Drag, drop, click to edit — and save back to your local file with live changes.</p>
+    <h1><strong>Interactive HTML Editor</strong> &amp; Renderer</h1>
+    <p class="empty-tagline">A free visual HTML editor that runs in your browser. Drop in any <code>.html</code> file, edit it like a designer — drag, drop, click, type — and save changes back to your local disk live. No signup. No upload. No server.</p>
     <div class="empty-actions">
       <button class="btn btn-primary" id="empty-open-local" title="Edit a file on your disk with live save">
         <i data-lucide="folder-open" class="icon"></i>
@@ -71,7 +190,62 @@
     <i data-lucide="git-commit-horizontal"></i>
     <span class="version-text">—</span>
   </a>
+
+  <!-- SEO content: long-form description for crawlers and curious visitors -->
+  <section class="seo-content" aria-label="About this HTML editor">
+    <div class="seo-inner">
+      <h2>The fastest way to edit HTML visually in your browser</h2>
+      <p>This is an <strong>interactive HTML editor and renderer</strong> for anyone who wants to change a web page without writing code by hand. Open any local <code>.html</code> file, see it rendered live, click an element to select it, drag a new block in from the sidebar, type to edit text, and hit <kbd>⌘S</kbd> to save the file on your disk. It's a free, open-source alternative to tools like Webflow, Pinegrow, and BlocsApp — minus the paywall and minus the server round-trip.</p>
+
+      <h2>Features</h2>
+      <ul class="seo-features">
+        <li><strong>Visual HTML editing</strong> — click any element, drag to reorder, double-click text to edit inline.</li>
+        <li><strong>Live local file editing</strong> — saves straight back to your disk via the File System Access API (Chrome, Edge, Arc).</li>
+        <li><strong>40+ pre-built blocks</strong> — typography, layout, components, media, lists, forms, navigation, tables.</li>
+        <li><strong>DOM tree panel</strong> — collapsible tree with drag-reorder and click-to-select.</li>
+        <li><strong>Style, attribute, and raw HTML editors</strong> for every element.</li>
+        <li><strong>Source mode</strong> with CodeMirror for byte-level control.</li>
+        <li><strong>Undo, redo, autosave, snippets, recent files, device preview, dark/light themes.</strong></li>
+        <li><strong>Diff vs. disk and diff vs. git HEAD</strong> — see exactly what changed before you save.</li>
+        <li><strong>100% private</strong> — your file never leaves your computer. No upload. No account. No tracking.</li>
+      </ul>
+
+      <h2>Who it's for</h2>
+      <p>Designers tweaking a landing page. Developers prototyping a layout. Marketers fixing copy on a static site. Students learning HTML by manipulating it visually. Anyone who needs a quick <strong>online HTML editor</strong> or <strong>HTML renderer</strong> without installing software.</p>
+
+      <h2>Frequently asked questions</h2>
+      <details>
+        <summary>What is an interactive HTML editor?</summary>
+        <p>An interactive HTML editor lets you edit a web page visually instead of writing raw HTML. You see the rendered page, click to select elements, drag to rearrange them, and the underlying HTML updates as you go.</p>
+      </details>
+      <details>
+        <summary>Is this HTML editor really free?</summary>
+        <p>Yes — 100% free, MIT licensed, open source. There is no paid tier. The code is on <a href="https://github.com/mncoleman/html-editor" rel="noopener">GitHub</a>.</p>
+      </details>
+      <details>
+        <summary>Does it work offline?</summary>
+        <p>The first page load needs internet (it lazy-loads CodeMirror from a CDN for source mode). After that, visual editing of local files works without a connection.</p>
+      </details>
+      <details>
+        <summary>Which browsers are supported?</summary>
+        <p>Any modern browser can use the visual editor with import/export. Live "save to disk" requires Chrome, Edge, Arc, or another Chromium-based browser with the File System Access API.</p>
+      </details>
+      <details>
+        <summary>Do my files get uploaded anywhere?</summary>
+        <p>No. Everything runs locally in your browser. The editor is a static site — there is no backend.</p>
+      </details>
+    </div>
+  </section>
 </div>
+
+<noscript>
+  <div class="noscript-fallback">
+    <h1>Interactive HTML Editor &amp; Renderer</h1>
+    <p>This is a free, browser-based visual HTML editor. To use it, please enable JavaScript.</p>
+    <p>Features include drag-and-drop visual editing, live save to your local disk, 40+ component blocks, DOM tree navigation, style and attribute editors, source mode with CodeMirror, undo/redo, autosave, device preview, and dark/light themes.</p>
+    <p>Source code: <a href="https://github.com/mncoleman/html-editor">github.com/mncoleman/html-editor</a></p>
+  </div>
+</noscript>
 
 <!-- Main editor UI -->
 <div id="editor" class="editor" hidden>
