@@ -7,7 +7,7 @@ window.DiffViewer = (function() {
 
   async function ensureLib() {
     if (jsdiff) return jsdiff;
-    jsdiff = await import('https://esm.sh/diff@5.2.0');
+    jsdiff = await import('diff');
     return jsdiff;
   }
 

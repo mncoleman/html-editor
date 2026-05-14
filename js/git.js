@@ -11,7 +11,7 @@ window.GitDiff = (function() {
   async function ensureLib() {
     if (git) return git;
     // ?bundle ships the buffer/path shims isomorphic-git needs in browsers
-    git = await import('https://esm.sh/isomorphic-git@1.27.2?bundle');
+    git = await import('isomorphic-git');
     return git;
   }
 
