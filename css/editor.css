@@ -1252,25 +1252,55 @@ body[data-mode="source"] .workspace { grid-template-columns: 1fr; }
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.1s;
+  transition: background 0.12s, border-color 0.12s, color 0.12s, box-shadow 0.12s;
 }
-.dialog-btn:hover { background: var(--bg-hover); }
 .dialog-btn:focus-visible {
   outline: 2px solid var(--selection);
   outline-offset: 2px;
 }
+
+/* Secondary (default): subtle bg shift; text stays high-contrast */
+.dialog-btn-secondary {
+  background: transparent;
+  color: var(--text-dim);
+}
+.dialog-btn-secondary:hover {
+  background: var(--bg-3);
+  color: var(--text);
+  border-color: var(--border-strong);
+}
+
+/* Primary: inverted contrast, hover deepens the bg AND lifts the button.
+   Explicitly re-state the text color in :hover so the brightness filter
+   never gets a chance to wash it out. */
 .dialog-btn-primary {
   background: var(--accent);
   color: var(--accent-on);
   border-color: var(--accent);
+  font-weight: 600;
 }
-.dialog-btn-primary:hover { filter: brightness(0.92); }
+.dialog-btn-primary:hover {
+  background: var(--accent-2);
+  border-color: var(--accent-2);
+  color: var(--accent-on);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  transform: translateY(-1px);
+}
+.dialog-btn-primary:active {
+  transform: translateY(0);
+  box-shadow: none;
+}
+
 .dialog-btn-primary.danger {
   background: var(--danger);
   border-color: var(--danger);
   color: white;
 }
-.dialog-btn-secondary { background: transparent; }
+.dialog-btn-primary.danger:hover {
+  background: #dc2626;
+  border-color: #dc2626;
+  color: white;
+}
 
 /* ---------- Diff modal ---------- */
 .diff-modal {
