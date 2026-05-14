@@ -8,7 +8,9 @@ window.EditorState = (function() {
     dirty: false,
     undoStack: [],
     redoStack: [],
-    maxHistory: 50,
+    maxHistory: 50,           // hard ceiling on number of snapshots
+    maxHistoryBytes: 8 * 1024 * 1024, // ~8MB total, shifts oldest when exceeded
+    historyBytes: 0,
     listeners: new Set(),
     snippets: [],
     recent: [],
@@ -28,13 +30,37 @@ window.EditorState = (function() {
 
   function on(fn) { state.listeners.add(fn); return () => state.listeners.delete(fn); }
 
-  // Snapshot the current canvas document for undo
+  // Snapshot the current canvas document for undo.
+  // Dedupes against the most recent snapshot (no-op edits don't grow the
+  // stack), and enforces both a count cap and a total-bytes cap so that
+  // long sessions on large documents don't balloon memory.
   function snapshot(label = '') {
     if (!state.doc) return;
     const html = state.doc.documentElement.outerHTML;
+    const top = state.undoStack[state.undoStack.length - 1];
+    if (top && top.html === html) {
+      // Edit produced an identical serialization — nothing to push, but
+      // make sure dirty / redo state still reflect the user's intent.
+      state.redoStack.length = 0;
+      setDirty(true);
+      return;
+    }
     const selPath = state.selected ? pathTo(state.selected) : null;
-    state.undoStack.push({ html, selPath, label, at: Date.now() });
-    if (state.undoStack.length > state.maxHistory) state.undoStack.shift();
+    const entry = { html, selPath, label, at: Date.now(), bytes: html.length };
+    state.undoStack.push(entry);
+    state.historyBytes += entry.bytes;
+
+    // Enforce count cap
+    while (state.undoStack.length > state.maxHistory) {
+      const dropped = state.undoStack.shift();
+      state.historyBytes -= dropped.bytes;
+    }
+    // Enforce bytes cap (but never drop below 2 entries — need one to
+    // restore and one as the "current" for the next undo to land on)
+    while (state.historyBytes > state.maxHistoryBytes && state.undoStack.length > 2) {
+      const dropped = state.undoStack.shift();
+      state.historyBytes -= dropped.bytes;
+    }
     state.redoStack.length = 0;
     setDirty(true);
     emit('history');
@@ -104,14 +130,13 @@ window.EditorState = (function() {
     state.selected = null;
     state.undoStack = [];
     state.redoStack = [];
+    state.historyBytes = 0;
     if (doc) {
-      // Initial snapshot
+      const html = doc.documentElement.outerHTML;
       state.undoStack.push({
-        html: doc.documentElement.outerHTML,
-        selPath: null,
-        label: 'initial',
-        at: Date.now()
+        html, selPath: null, label: 'initial', at: Date.now(), bytes: html.length
       });
+      state.historyBytes = html.length;
     }
     emit('doc-changed');
   }
