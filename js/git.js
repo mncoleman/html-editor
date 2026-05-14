@@ -91,23 +91,46 @@ window.GitDiff = (function() {
       .replace(/\s+data-he-editing="[^"]*"/g, '');
   }
 
-  // BFS the directory tree to find a FileSystemFileHandle that's the same
-  // entry as our editor's handle. Returns the path-from-root or null.
-  // Skips .git and node_modules.
+  // Walk the directory tree to find a FileSystemFileHandle that's the
+  // same entry as our editor's handle. Returns the path-from-root or null.
+  // Bounded by both directory depth and total file count so deep / weird
+  // repos can't freeze the UI for seconds.
+  const WALK_MAX_DEPTH = 6;
+  const WALK_MAX_FILES = 5000;
+  // sentinel error for cap-exceeded so the caller can show a useful message
+  class WalkAborted extends Error { constructor() { super('walk-aborted'); this.aborted = true; } }
   async function findRelativePath(rootHandle, targetFile) {
-    const SKIP = new Set(['.git', 'node_modules', '.next', 'dist', 'build', '.cache']);
-    async function walk(dir, prefix) {
+    const SKIP = new Set(['.git', 'node_modules', '.next', 'dist', 'build', '.cache', '.svelte-kit', '.turbo', 'out', 'coverage', '.venv', 'venv', '__pycache__']);
+    let fileCount = 0;
+    async function walk(dir, prefix, depth) {
+      if (depth > WALK_MAX_DEPTH) return null;
       for await (const [name, handle] of dir.entries()) {
         if (handle.kind === 'file') {
+          fileCount++;
+          if (fileCount > WALK_MAX_FILES) throw new WalkAborted();
           try { if (await handle.isSameEntry(targetFile)) return prefix + name; } catch {}
         } else if (handle.kind === 'directory' && !SKIP.has(name)) {
-          const found = await walk(handle, prefix + name + '/');
+          const found = await walk(handle, prefix + name + '/', depth + 1);
           if (found) return found;
         }
       }
       return null;
     }
-    return walk(rootHandle, '');
+    try {
+      return await walk(rootHandle, '', 0);
+    } catch (e) {
+      if (e && e.aborted) {
+        await window.Dialog.alert({
+          title: 'Couldn\'t locate file in repo',
+          message:
+            `Scanned more than ${WALK_MAX_FILES} files in this directory without finding the open file. ` +
+            'Pick the immediate sub-directory containing the file instead, or move the file into a smaller subtree.',
+          danger: true,
+        });
+        return null;
+      }
+      throw e;
+    }
   }
 
   // Minimal Node-style fs adapter on top of a FileSystemDirectoryHandle.
