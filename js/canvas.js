@@ -5,6 +5,7 @@ window.Canvas = (function() {
   let canvasFrame;
   let isPreview = false;
   let dragData = null; // { type: 'block'|'move', payload, ghostEl? }
+  let iframeMutationObserver = null; // disconnected before re-attach on doc-replaced
 
   // Inject styles into the iframe so editor selection works
   const IFRAME_STYLES = `
@@ -206,8 +207,15 @@ window.Canvas = (function() {
     // injections). The observer can fire many times per frame for big
     // changes (drops, undo restoring a tree, large style edits); coalesce
     // the overlay/autosave work into a single rAF callback per frame.
+    // Disconnect any prior observer before installing a fresh one.
+    // wireIframeEvents fires on every doc-replaced (undo via doc.write
+    // reinstalls listeners). Without this, observers from prior
+    // documents stayed alive watching detached trees — slow leak.
+    if (iframeMutationObserver) {
+      try { iframeMutationObserver.disconnect(); } catch (_) {}
+    }
     let moPending = false;
-    const mo = new MutationObserver((mutations) => {
+    iframeMutationObserver = new MutationObserver((mutations) => {
       const meaningful = mutations.some(m =>
         !(m.target && m.target.id === '__he_styles__')
       );
@@ -219,7 +227,7 @@ window.Canvas = (function() {
         updateOverlay();
       });
     });
-    mo.observe(doc.documentElement, { childList: true, subtree: true, attributes: true, characterData: true });
+    iframeMutationObserver.observe(doc.documentElement, { childList: true, subtree: true, attributes: true, characterData: true });
   }
 
   function handlePreviewLinkClick(link) {
