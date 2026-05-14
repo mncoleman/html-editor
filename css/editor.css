@@ -1445,20 +1445,29 @@ html[data-theme="light"] .diff-body .diff-line.added { color: #15803d !important
 html[data-theme="light"] .diff-body .diff-line.removed { color: #b91c1c !important; }
 
 /* Split / side-by-side view: row-based grid where pairs of cells fill
-   two columns; gap rows span the full width via grid-column: 1 / -1.   */
+   two columns; gap rows span the full width via grid-column: 1 / -1.
+   minmax(0,1fr) is critical — without it, the intrinsic width of a long
+   <pre>-content line blows out the column and overlaps its neighbor. */
 .diff-body.split { display: block; padding: 0; }
 .diff-split {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 0;
   min-height: 100%;
   border-top: 1px solid var(--border);
 }
 .diff-split > .diff-line {
-  grid-template-columns: 48px 24px 1fr;
+  grid-template-columns: 48px 24px minmax(0, 1fr);
   padding-left: 0;
   border-left: 3px solid transparent;
   border-right: 1px solid var(--border);
+  min-width: 0;
+  overflow: hidden;
+}
+.diff-split > .diff-line > .diff-content {
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: thin;
 }
 .diff-split > .diff-line:nth-child(2n) { border-right: none; }
 
