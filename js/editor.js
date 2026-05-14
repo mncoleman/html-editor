@@ -214,9 +214,11 @@
       }
     });
 
-    // Block accidental close when dirty
+    // Block accidental close when dirty — including linked files, since
+    // closing the tab abandons unsaved edits regardless of where they
+    // would have been written.
     window.addEventListener('beforeunload', (e) => {
-      if (ES.state.dirty && !ES.state.fileHandle) {
+      if (ES.state.dirty) {
         e.preventDefault();
         e.returnValue = '';
       }
