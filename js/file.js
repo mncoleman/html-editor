@@ -99,19 +99,61 @@ window.FileOps = (function() {
 
   // Get the canonical bytes to write, depending on which mode is active.
   // - Source mode: the CodeMirror buffer, byte-for-byte.
-  // - Visual mode (dirty): serialize the iframe DOM. This normalizes
-  //   formatting (empty class="", attr order, whitespace) — documented
-  //   tradeoff.
   // - Visual mode (clean): the user hasn't edited anything since load,
-  //   so return the original source string verbatim. Serializing would
-  //   produce a spurious diff against disk for a doc with no edits.
+  //   so return the original source string verbatim.
+  // - Visual mode (dirty): serialize the iframe DOM, then re-encode
+  //   characters back to whichever entities the original source used
+  //   (`—` → `&mdash;` if the source had `&mdash;`). This kills the
+  //   widespread entity-normalization noise that otherwise touches
+  //   every line containing a special character.
   function currentHtml() {
     if (ES.state.mode === 'source' && window.Source) {
       return window.Source.getContent();
     }
     if (!ES.state.doc) return ES.state.sourceHtml || '';
     if (!ES.state.dirty && ES.state.sourceHtml) return ES.state.sourceHtml;
-    return stripEditorTraces('<!DOCTYPE html>\n' + ES.state.doc.documentElement.outerHTML);
+    let serialized = stripEditorTraces('<!DOCTYPE html>\n' + ES.state.doc.documentElement.outerHTML);
+    if (ES.state.sourceHtml) serialized = reEncodeEntities(serialized, ES.state.sourceHtml);
+    return serialized;
+  }
+
+  // Cache: keyed by sourceHtml reference, value is the unicode→entity map
+  // derived from it. Building the map is cheap (~one regex pass), but the
+  // cache means a save + immediate diff doesn't repeat the work.
+  let entityMapCache = { src: null, map: null };
+  function buildEntityMap(sourceHtml) {
+    if (entityMapCache.src === sourceHtml) return entityMapCache.map;
+    const map = new Map();
+    // Match named, decimal, and hex entities. Ignore the ones that
+    // outerHTML always emits as entities (amp, lt, gt, quot, apos) so we
+    // don't try to "preserve" e.g. &lt; — it stays &lt; on serialize
+    // anyway.
+    const ALWAYS_ESCAPED = new Set(['&amp;', '&lt;', '&gt;', '&quot;', '&apos;']);
+    const re = /&(?:#\d+|#x[\da-fA-F]+|[a-zA-Z][a-zA-Z0-9]*);/g;
+    const decoder = document.createElement('div');
+    let m;
+    while ((m = re.exec(sourceHtml)) !== null) {
+      const entity = m[0];
+      if (ALWAYS_ESCAPED.has(entity)) continue;
+      decoder.innerHTML = entity;
+      const ch = decoder.textContent;
+      // Only useful if the entity actually decoded to something different
+      // (e.g. an unknown entity stays literal) and we don't already have
+      // a mapping for this char.
+      if (ch && ch !== entity && !map.has(ch)) map.set(ch, entity);
+    }
+    entityMapCache = { src: sourceHtml, map };
+    return map;
+  }
+
+  function reEncodeEntities(html, sourceHtml) {
+    const map = buildEntityMap(sourceHtml);
+    if (map.size === 0) return html;
+    const escaped = Array.from(map.keys())
+      .map(c => c.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+      .join('|');
+    const re = new RegExp('(' + escaped + ')', 'g');
+    return html.replace(re, (_, ch) => map.get(ch));
   }
 
   async function save() {
