@@ -11,15 +11,11 @@ window.DiffViewer = (function() {
     return jsdiff;
   }
 
+  // Same canonical "what would we write?" used by save/export. In
+  // particular, a clean (un-dirtied) Visual mode returns the original
+  // source verbatim so we don't show parser-normalization noise.
   function currentEditorText() {
-    if (ES.state.mode === 'source' && window.Source) {
-      return window.Source.getContent();
-    }
-    if (!ES.state.doc) return ES.state.sourceHtml || '';
-    return ('<!DOCTYPE html>\n' + ES.state.doc.documentElement.outerHTML)
-      .replace(/<style id="__he_styles__">[\s\S]*?<\/style>/g, '')
-      .replace(/\s+contenteditable="[^"]*"/g, '')
-      .replace(/\s+data-he-editing="[^"]*"/g, '');
+    return (window.FileOps && window.FileOps.currentHtml()) || '';
   }
 
   async function showAgainstDisk() {

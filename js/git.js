@@ -82,13 +82,11 @@ window.GitDiff = (function() {
     catch { return null; }
   }
 
+  // Match save's idea of "what would we write" — clean Visual mode
+  // returns sourceHtml verbatim so the diff against HEAD doesn't show
+  // parser-normalization noise.
   function currentEditorText() {
-    if (ES.state.mode === 'source' && window.Source) return window.Source.getContent();
-    if (!ES.state.doc) return ES.state.sourceHtml || '';
-    return ('<!DOCTYPE html>\n' + ES.state.doc.documentElement.outerHTML)
-      .replace(/<style id="__he_styles__">[\s\S]*?<\/style>/g, '')
-      .replace(/\s+contenteditable="[^"]*"/g, '')
-      .replace(/\s+data-he-editing="[^"]*"/g, '');
+    return (window.FileOps && window.FileOps.currentHtml()) || '';
   }
 
   // Walk the directory tree to find a FileSystemFileHandle that's the

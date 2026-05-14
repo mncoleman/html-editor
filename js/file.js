@@ -99,12 +99,18 @@ window.FileOps = (function() {
 
   // Get the canonical bytes to write, depending on which mode is active.
   // - Source mode: the CodeMirror buffer, byte-for-byte.
-  // - Visual mode: serialize the iframe DOM (known to normalize formatting).
+  // - Visual mode (dirty): serialize the iframe DOM. This normalizes
+  //   formatting (empty class="", attr order, whitespace) — documented
+  //   tradeoff.
+  // - Visual mode (clean): the user hasn't edited anything since load,
+  //   so return the original source string verbatim. Serializing would
+  //   produce a spurious diff against disk for a doc with no edits.
   function currentHtml() {
     if (ES.state.mode === 'source' && window.Source) {
       return window.Source.getContent();
     }
     if (!ES.state.doc) return ES.state.sourceHtml || '';
+    if (!ES.state.dirty && ES.state.sourceHtml) return ES.state.sourceHtml;
     return stripEditorTraces('<!DOCTYPE html>\n' + ES.state.doc.documentElement.outerHTML);
   }
 
@@ -337,5 +343,5 @@ h1 { font-size: 32px; }
     }
   });
 
-  return { init, openLocalFile, promptImport, importFile, save, exportFile, newBlank, reloadFromDisk, checkExternalChanges, supportsFSA };
+  return { init, openLocalFile, promptImport, importFile, save, exportFile, newBlank, reloadFromDisk, checkExternalChanges, currentHtml, supportsFSA };
 })();
