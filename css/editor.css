@@ -305,10 +305,31 @@ html[data-theme="light"] .empty-state {
   padding: 20px 14px;
   gap: 6px;
 }
+.empty-actions .btn { position: relative; }
 .empty-actions .btn:hover { transform: translateY(-1px); }
 .empty-actions .btn .icon { font-size: 24px; }
-.empty-actions .btn span:nth-child(2) { font-weight: 600; }
+.empty-actions .btn > span { font-weight: 600; }
 .empty-actions .btn small { color: var(--text-faint); font-size: 11px; }
+.btn-shortcut {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  font-family: var(--mono);
+  font-size: 10px;
+  line-height: 1;
+  padding: 3px 5px;
+  background: var(--bg-1);
+  color: var(--text-faint);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+}
+.empty-actions .btn-primary .btn-shortcut {
+  background: rgba(0, 0, 0, 0.18);
+  color: var(--accent-on);
+  border-color: transparent;
+}
+#empty-restore { position: relative; padding-left: 36px; padding-right: 16px; }
+#empty-restore .btn-shortcut { top: 50%; left: 10px; right: auto; transform: translateY(-50%); }
 .empty-actions .btn-primary {
   background: var(--accent);
   border-color: transparent;
