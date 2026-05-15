@@ -1125,6 +1125,30 @@ body[data-mode="source"] .workspace { grid-template-columns: 1fr; }
 .breadcrumbs .crumb:hover { background: var(--bg-3); color: var(--text); }
 .breadcrumbs .crumb.active { color: var(--accent); }
 .breadcrumbs .sep { color: var(--text-faint); }
+.crumb-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: 8px;
+  padding-left: 8px;
+  border-left: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.crumb-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  background: transparent;
+  border: none;
+  color: var(--text-faint);
+  border-radius: 3px;
+  cursor: pointer;
+  padding: 0;
+}
+.crumb-btn:hover { background: var(--bg-3); color: var(--text); }
+.crumb-btn [data-lucide], .crumb-btn .lucide { width: 12px; height: 12px; }
 .status-right { display: flex; align-items: center; gap: 12px; }
 .autosave { color: var(--text-faint); }
 
