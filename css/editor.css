@@ -1128,7 +1128,7 @@ body[data-mode="source"] .workspace { grid-template-columns: 1fr; }
 .crumb-actions {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
+  gap: 4px;
   margin-left: 8px;
   padding-left: 8px;
   border-left: 1px solid var(--border);
@@ -1137,18 +1137,22 @@ body[data-mode="source"] .workspace { grid-template-columns: 1fr; }
 .crumb-btn {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  width: 20px;
+  gap: 4px;
   height: 20px;
+  padding: 0 6px;
   background: transparent;
   border: none;
   color: var(--text-faint);
   border-radius: 3px;
   cursor: pointer;
-  padding: 0;
+  font-family: inherit;
+  font-size: 11px;
+  line-height: 1;
+  white-space: nowrap;
 }
 .crumb-btn:hover { background: var(--bg-3); color: var(--text); }
 .crumb-btn [data-lucide], .crumb-btn .lucide { width: 12px; height: 12px; }
+.crumb-btn-label { font-variant-numeric: tabular-nums; }
 .status-right { display: flex; align-items: center; gap: 12px; }
 .autosave { color: var(--text-faint); }
 

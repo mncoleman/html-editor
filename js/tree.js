@@ -176,22 +176,40 @@ window.Tree = (function() {
 
     const actions = document.createElement('span');
     actions.className = 'crumb-actions';
-    actions.appendChild(makeCrumbBtn('copy', 'Copy element HTML', () => copyElementHtml(sel)));
-    actions.appendChild(makeCrumbBtn('hash', 'Copy source line number(s)', () => copyLineNumbers(sel)));
+    actions.appendChild(makeCrumbBtn('copy', 'Copy HTML', () => copyElementHtml(sel)));
+    actions.appendChild(makeCrumbBtn('list-tree', 'Copy Path', () => copyCssPath(sel)));
+    const lineLabel = computeLineLabel(sel);
+    const lineText = lineLabel ? `Line ${lineLabel}` : 'Line';
+    actions.appendChild(makeCrumbBtn('hash', lineText, () => copyLineNumbers(sel)));
     breadcrumbsEl.appendChild(actions);
     if (window.lucide && window.lucide.createIcons) {
       window.lucide.createIcons({ attrs: { class: ['lucide'] }, nameAttr: 'data-lucide' });
     }
   }
 
-  function makeCrumbBtn(icon, title, onClick) {
+  function computeLineLabel(el) {
+    const source = ES.state.sourceHtml || '';
+    if (!source) return null;
+    const path = ES.pathTo(el);
+    if (!path) return null;
+    const range = locateInSource(source, path);
+    if (!range) return null;
+    return range.startLine === range.endLine
+      ? String(range.startLine)
+      : `${range.startLine}-${range.endLine}`;
+  }
+
+  function makeCrumbBtn(icon, label, onClick) {
     const b = document.createElement('button');
     b.className = 'crumb-btn';
-    b.title = title;
     b.type = 'button';
     const i = document.createElement('i');
     i.setAttribute('data-lucide', icon);
     b.appendChild(i);
+    const lbl = document.createElement('span');
+    lbl.className = 'crumb-btn-label';
+    lbl.textContent = label;
+    b.appendChild(lbl);
     b.addEventListener('click', (e) => { e.stopPropagation(); onClick(); });
     return b;
   }
@@ -199,6 +217,47 @@ window.Tree = (function() {
   function copyElementHtml(el) {
     const html = el.outerHTML || '';
     writeClipboard(html, `Copied ${el.tagName.toLowerCase()} (${html.length} chars)`);
+  }
+
+  function copyCssPath(el) {
+    const path = buildCssPath(el);
+    if (!path) { toast('Could not build path', 'warn'); return; }
+    writeClipboard(path, `Copied path: ${path}`);
+  }
+
+  // Build a CSS selector path from <body> down to the target element.
+  // Each segment uses #id when present (and short-circuits the walk),
+  // otherwise tag + class list, and adds :nth-of-type only when needed
+  // to disambiguate siblings of the same tag.
+  function buildCssPath(el) {
+    const parts = [];
+    let cur = el;
+    while (cur && cur.nodeType === 1 && cur.tagName) {
+      const tag = cur.tagName.toLowerCase();
+      if (tag === 'html') break;
+      if (cur.id) {
+        parts.unshift(`${tag}#${cssEscapeIdent(cur.id)}`);
+        break;
+      }
+      let part = tag;
+      const cls = (typeof cur.className === 'string' ? cur.className : '')
+        .trim()
+        .split(/\s+/)
+        .filter(c => c && !c.startsWith('he-'));
+      if (cls.length) part += '.' + cls.map(cssEscapeIdent).join('.');
+      if (cur.parentElement) {
+        const sameTag = Array.from(cur.parentElement.children).filter(c => c.tagName === cur.tagName);
+        if (sameTag.length > 1) part += `:nth-of-type(${sameTag.indexOf(cur) + 1})`;
+      }
+      parts.unshift(part);
+      cur = cur.parentElement;
+    }
+    return parts.join(' > ');
+  }
+
+  function cssEscapeIdent(s) {
+    if (window.CSS && typeof window.CSS.escape === 'function') return window.CSS.escape(s);
+    return s.replace(/([^\w-])/g, '\\$1');
   }
 
   function copyLineNumbers(el) {
@@ -328,8 +387,18 @@ window.Tree = (function() {
     return n;
   }
 
-  function locateInSource(source, path) {
+  // Tokenization is one full pass over sourceHtml; cache by reference so
+  // re-rendering breadcrumbs on every selection change doesn't re-parse.
+  let tokenCache = { src: null, tokens: null };
+  function getTokens(source) {
+    if (tokenCache.src === source) return tokenCache.tokens;
     const tokens = tokenizeHtml(source);
+    tokenCache = { src: source, tokens };
+    return tokens;
+  }
+
+  function locateInSource(source, path) {
+    const tokens = getTokens(source);
     let htmlIdx = -1;
     for (let i = 0; i < tokens.length; i++) {
       if (!tokens[i].isClose && tokens[i].tag === 'html') { htmlIdx = i; break; }
