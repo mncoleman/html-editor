@@ -37,8 +37,9 @@
       const age = minutes < 60 ? `${minutes}m` : `${Math.round(minutes/60)}h`;
       const restore = document.createElement('button');
       restore.className = 'btn';
+      restore.id = 'empty-restore';
       restore.style.marginTop = '12px';
-      restore.innerHTML = `<i data-lucide="history" class="icon"></i><span>Restore last session</span><small>${age} ago · ${escapeHtml(auto.name)}</small>`;
+      restore.innerHTML = `<kbd class="btn-shortcut">R</kbd><i data-lucide="history" class="icon"></i><span>Restore last session</span><small>${age} ago · ${escapeHtml(auto.name)}</small>`;
       restore.addEventListener('click', async () => {
         ES.setFile(null, auto.name);
         ES.state.sourceHtml = auto.html;
@@ -68,6 +69,29 @@
     ES.on((evt) => {
       if (evt === 'doc-changed' && ES.state.doc) showEditor();
       if (evt === 'mode-changed') showEditor();
+    });
+
+    // Single-letter shortcuts on the empty state: A/B/C/R map to the
+    // action buttons. Bare keys only — modifier keys defer to the OS
+    // (cmd+A "select all" etc.) and field focus suppresses everything.
+    document.addEventListener('keydown', (e) => {
+      const empty = document.getElementById('empty-state');
+      if (!empty || empty.hidden) return;
+      if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
+      const t = e.target;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+      const map = {
+        a: 'empty-open-local',
+        b: 'empty-import',
+        c: 'empty-new',
+        r: 'empty-restore',
+      };
+      const id = map[e.key.toLowerCase()];
+      if (!id) return;
+      const btn = document.getElementById(id);
+      if (!btn) return;
+      e.preventDefault();
+      btn.click();
     });
   }
 
