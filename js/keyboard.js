@@ -10,6 +10,12 @@ window.Keyboard = (function() {
     const mod = e.metaKey || e.ctrlKey;
     const inField = isInField(e.target);
 
+    // Escape: exit preview takes priority over field focus, since the field
+    // is most likely an iframe input that doesn't matter once chrome is back.
+    if (e.key === 'Escape' && window.__heExitPreview && window.__heExitPreview()) {
+      return;
+    }
+
     // Save: cmd+S even if in field
     if (mod && e.key === 's') {
       e.preventDefault();
@@ -50,9 +56,8 @@ window.Keyboard = (function() {
       window.Canvas.deleteSelected();
       return;
     }
-    // Escape: exit preview if active, otherwise deselect
+    // Escape: deselect (preview-exit handled above, before inField guard)
     if (e.key === 'Escape') {
-      if (window.__heExitPreview && window.__heExitPreview()) return;
       ES.deselect();
       return;
     }
