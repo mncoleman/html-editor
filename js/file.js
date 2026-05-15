@@ -113,8 +113,138 @@ window.FileOps = (function() {
     if (!ES.state.doc) return ES.state.sourceHtml || '';
     if (!ES.state.dirty && ES.state.sourceHtml) return ES.state.sourceHtml;
     let serialized = stripEditorTraces('<!DOCTYPE html>\n' + ES.state.doc.documentElement.outerHTML);
-    if (ES.state.sourceHtml) serialized = reEncodeEntities(serialized, ES.state.sourceHtml);
+    if (ES.state.sourceHtml) {
+      serialized = reEncodeEntities(serialized, ES.state.sourceHtml);
+      // Splice the user's edit back into the original source so untouched
+      // regions stay byte-identical (preserves doctype casing, original
+      // whitespace, and avoids implicit <tbody> showing up as a diff).
+      const spliced = spliceEditIntoSource(serialized, ES.state.sourceHtml);
+      if (spliced !== null) serialized = spliced;
+    }
     return serialized;
+  }
+
+  // Reduce the serialized-edited HTML back to (original source) + (just the
+  // user's edit). Returns null if we can't confidently align — caller falls
+  // back to the full serialization.
+  function spliceEditIntoSource(curNorm, sourceHtml) {
+    // Re-parse the source the same way the editor parsed it on load. The
+    // result's outerHTML form is the "normalized" view that curNorm is
+    // expressed in — so the diff between origNorm and curNorm is purely
+    // the user's edit, with no normalization noise.
+    let origDoc;
+    try { origDoc = new DOMParser().parseFromString(sourceHtml, 'text/html'); }
+    catch (_) { return null; }
+    if (!origDoc || !origDoc.documentElement) return null;
+    const origNorm = stripEditorTraces('<!DOCTYPE html>\n' + origDoc.documentElement.outerHTML);
+
+    if (origNorm === curNorm) return sourceHtml;
+
+    // Find common prefix and suffix (in normalized space).
+    const maxPrefix = Math.min(origNorm.length, curNorm.length);
+    let P = 0;
+    while (P < maxPrefix && origNorm.charCodeAt(P) === curNorm.charCodeAt(P)) P++;
+    const maxSuffix = Math.min(origNorm.length - P, curNorm.length - P);
+    let S = 0;
+    while (
+      S < maxSuffix &&
+      origNorm.charCodeAt(origNorm.length - 1 - S) === curNorm.charCodeAt(curNorm.length - 1 - S)
+    ) S++;
+
+    // Map P (end of unchanged prefix in normalized) and origNorm.length - S
+    // (start of unchanged suffix in normalized) into source coordinates.
+    const sP = mapNormToSource(P, origNorm, sourceHtml);
+    if (sP < 0) return null;
+    const sQ = mapNormToSource(origNorm.length - S, origNorm, sourceHtml);
+    if (sQ < 0) return null;
+
+    return sourceHtml.slice(0, sP) + curNorm.slice(P, curNorm.length - S) + sourceHtml.slice(sQ);
+  }
+
+  // Walk `norm` and `source` in lockstep, tolerating the specific
+  // differences a DOMParser+outerHTML round-trip can introduce, and return
+  // the source position corresponding to position `targetNormPos` in norm.
+  // Tolerated differences:
+  //   - <!DOCTYPE html> casing (and the whitespace between doctype and <html>)
+  //   - any run of whitespace between tags can differ in both amount and kind
+  //   - implicit <tbody>/</tbody> tags that the parser inserts where missing
+  //   - attribute reordering on the same opening tag
+  function mapNormToSource(targetNormPos, norm, source) {
+    let n = 0, s = 0;
+    const isWS = (ch) => ch === ' ' || ch === '\t' || ch === '\n' || ch === '\r' || ch === '\f';
+
+    while (n < targetNormPos) {
+      if (n < norm.length && s < source.length && norm.charCodeAt(n) === source.charCodeAt(s)) {
+        n++; s++; continue;
+      }
+
+      // Whitespace divergence: skip whitespace on whichever side has it
+      // (we re-converge on the next non-ws char). This handles <html>\n\t<head>
+      // ↔ <html><head>, </body>\n</html> ↔ </body></html>, and similar.
+      let advanced = false;
+      while (n < norm.length && isWS(norm[n]) && n < targetNormPos) { n++; advanced = true; }
+      while (s < source.length && isWS(source[s])) { s++; advanced = true; }
+      if (advanced) continue;
+
+      // Doctype case difference: <!doctype html> vs <!DOCTYPE html>
+      if (matchCI(norm, n, '<!doctype') && matchCI(source, s, '<!doctype')) {
+        // Advance past the doctype declaration in both, up to and
+        // including the '>'.
+        const ne = norm.indexOf('>', n);
+        const se = source.indexOf('>', s);
+        if (ne < 0 || se < 0) return -1;
+        if (n + (ne - n + 1) > targetNormPos) {
+          // The target falls inside the doctype — clamp to start of doctype
+          // in source so we don't split it mid-token.
+          return s;
+        }
+        n = ne + 1; s = se + 1;
+        continue;
+      }
+
+      // Implicit <tbody>/</tbody> only present on the normalized side.
+      if (matchCI(norm, n, '<tbody>')) { n += '<tbody>'.length; continue; }
+      if (matchCI(norm, n, '</tbody>')) { n += '</tbody>'.length; continue; }
+      // (Defensive — shouldn't happen, but mirror for the source side)
+      if (matchCI(source, s, '<tbody>')) { s += '<tbody>'.length; continue; }
+      if (matchCI(source, s, '</tbody>')) { s += '</tbody>'.length; continue; }
+
+      // Attribute reordering / quoting differences on the same opening tag.
+      // If both sides are sitting at '<' and the tag name matches, skip to
+      // the matching '>' on each side. Inside-attr quoting differences are
+      // not the user's edit; we just have to keep alignment.
+      if (norm[n] === '<' && source[s] === '<') {
+        const ne = norm.indexOf('>', n);
+        const se = source.indexOf('>', s);
+        if (ne > n && se > s) {
+          const nTag = norm.slice(n + 1, ne).split(/[\s/>]/)[0].toLowerCase();
+          const sTag = source.slice(s + 1, se).split(/[\s/>]/)[0].toLowerCase();
+          if (nTag && nTag === sTag) {
+            if (ne + 1 > targetNormPos) return s; // target inside this tag — anchor at tag start
+            n = ne + 1; s = se + 1;
+            continue;
+          }
+        }
+      }
+
+      // Unknown divergence — bail out.
+      return -1;
+    }
+    return s;
+  }
+
+  function matchCI(str, pos, needle) {
+    if (pos + needle.length > str.length) return false;
+    for (let i = 0; i < needle.length; i++) {
+      const a = str.charCodeAt(pos + i);
+      const b = needle.charCodeAt(i);
+      if (a === b) continue;
+      // ASCII case-insensitive
+      if (a >= 65 && a <= 90 && a + 32 === b) continue;
+      if (a >= 97 && a <= 122 && a - 32 === b) continue;
+      return false;
+    }
+    return true;
   }
 
   // Cache: keyed by sourceHtml reference, value is the unicode→entity map
