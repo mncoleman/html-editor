@@ -179,6 +179,15 @@ window.Canvas = (function() {
       if (!e.altKey && !e.shiftKey) return; // require modifier to start drag inside canvas
     });
 
+    // Escape inside the iframe should also exit preview. Iframe keydowns
+    // don't bubble up to the parent document, so the global handler in
+    // keyboard.js never fires when focus is inside the canvas.
+    doc.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && window.__heExitPreview) {
+        if (window.__heExitPreview()) e.preventDefault();
+      }
+    }, true);
+
     // Scroll: re-sync the selection overlay, and CLEAR the hover box
     // (otherwise it sits stale at the old position while the underlying
     // element has scrolled out from under it — looks like the box is
@@ -509,9 +518,12 @@ window.Canvas = (function() {
   }
 
   function selectionContext(el) {
-    if (!el) return null;
-    if (el.closest && el.closest('table')) return 'table';
-    if (el.closest && el.closest('ul, ol')) return 'list';
+    if (!el || !el.matches) return null;
+    // Only show structural helpers when the selection IS a table/list
+    // element — not for arbitrary descendants (e.g. a <p> inside a <td>),
+    // which is too noisy and triggers on layout-tables.
+    if (el.matches('table, thead, tbody, tfoot, tr, td, th, caption, colgroup, col')) return 'table';
+    if (el.matches('ul, ol, li')) return 'list';
     return null;
   }
 
