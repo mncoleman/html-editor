@@ -431,7 +431,7 @@ html[data-theme="dark"] .empty-actions .btn-primary:hover { filter: brightness(0
   border-radius: 5px;
 }
 .brand-text {
-  font-weight: 200;
+  font-weight: 500;
   font-size: 11px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -1455,6 +1455,14 @@ body[data-mode="source"] .workspace { grid-template-columns: 1fr; }
   border-left: 3px solid transparent;
   color: var(--text);
 }
+/* Unified view only: grow each row to its content width so the added/removed
+   highlight background covers the whole line when scrolled horizontally
+   (min-width keeps short lines filling the viewport). Not applied to split,
+   where lines must stay within their column. */
+.diff-body[data-view="unified"] .diff-line {
+  width: max-content;
+  min-width: 100%;
+}
 .diff-body .diff-num {
   text-align: right;
   padding-right: 8px;
@@ -1511,7 +1519,9 @@ html[data-theme="light"] .diff-body .diff-line.removed { color: #b91c1c !importa
   border-top: 1px solid var(--border);
 }
 .diff-split > .diff-line {
-  grid-template-columns: 48px 24px minmax(0, 1fr);
+  /* split cells emit exactly two elements (num + content); the grid must
+     match or content lands in a too-narrow track and collapses. */
+  grid-template-columns: 48px minmax(0, 1fr);
   padding-left: 0;
   border-left: 3px solid transparent;
   border-right: 1px solid var(--border);
@@ -1519,9 +1529,13 @@ html[data-theme="light"] .diff-body .diff-line.removed { color: #b91c1c !importa
   overflow: hidden;
 }
 .diff-split > .diff-line > .diff-content {
+  /* Wrap long lines inside the cell rather than giving every overflowing
+     line its own horizontal scrollbar. The grid keeps each left/right pair
+     in one row, so a wrapped cell stays vertically aligned with its mate. */
   min-width: 0;
-  overflow-x: auto;
-  scrollbar-width: thin;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 .diff-split > .diff-line:nth-child(2n) { border-right: none; }
 
