@@ -114,12 +114,23 @@ window.FileOps = (function() {
     if (!ES.state.dirty && ES.state.sourceHtml) return ES.state.sourceHtml;
     let serialized = stripEditorTraces('<!DOCTYPE html>\n' + ES.state.doc.documentElement.outerHTML);
     if (ES.state.sourceHtml) {
-      serialized = reEncodeEntities(serialized, ES.state.sourceHtml);
       // Splice the user's edit back into the original source so untouched
       // regions stay byte-identical (preserves doctype casing, original
-      // whitespace, and avoids implicit <tbody> showing up as a diff).
+      // whitespace, entity encoding, and avoids implicit <tbody> showing up
+      // as a diff).
+      //
+      // Splice against the *raw* serialization — NOT an entity-re-encoded
+      // copy. The splice aligns curNorm char-for-char against a fresh reparse
+      // of the source (origNorm), and origNorm is itself not re-encoded. If we
+      // re-encoded here first, the two would desync at the very first entity
+      // (e.g. a `&copy;`/`&mdash;` in <head>): the prefix scan would stop
+      // there and bleed normalized markup from that point all the way down to
+      // the user's actual edit — rewriting the head even when only the body
+      // changed. Entity re-encoding is applied only to the spliced-in edit
+      // region (inside spliceEditIntoSource), or to the whole document when
+      // the splice can't confidently align (fallback below).
       const spliced = spliceEditIntoSource(serialized, ES.state.sourceHtml);
-      if (spliced !== null) serialized = spliced;
+      serialized = spliced !== null ? spliced : reEncodeEntities(serialized, ES.state.sourceHtml);
     }
     return serialized;
   }
@@ -128,6 +139,12 @@ window.FileOps = (function() {
   // user's edit). Returns null if we can't confidently align — caller falls
   // back to the full serialization.
   function spliceEditIntoSource(curNorm, sourceHtml) {
+    // `curNorm` MUST be the raw `outerHTML` serialization (entities left as the
+    // literal characters the parser decoded them to) — NOT entity-re-encoded.
+    // It has to match `origNorm` below char-for-char in untouched regions, and
+    // origNorm is produced by the same raw outerHTML path. Re-encoding is done
+    // afterwards, on the spliced middle only.
+    //
     // Re-parse the source the same way the editor parsed it on load. The
     // result's outerHTML form is the "normalized" view that curNorm is
     // expressed in — so the diff between origNorm and curNorm is purely
@@ -158,7 +175,12 @@ window.FileOps = (function() {
     const sQ = mapNormToSource(origNorm.length - S, origNorm, sourceHtml);
     if (sQ < 0) return null;
 
-    return sourceHtml.slice(0, sP) + curNorm.slice(P, curNorm.length - S) + sourceHtml.slice(sQ);
+    // The surrounding slices are verbatim original source (already in the
+    // source's own entity style); only the changed middle comes from the
+    // normalized DOM serialization, so only it needs entities re-encoded back
+    // to match (`—` → `&mdash;` if the source used `&mdash;`).
+    const middle = reEncodeEntities(curNorm.slice(P, curNorm.length - S), sourceHtml);
+    return sourceHtml.slice(0, sP) + middle + sourceHtml.slice(sQ);
   }
 
   // Walk `norm` and `source` in lockstep, tolerating the specific
@@ -168,7 +190,9 @@ window.FileOps = (function() {
   //   - <!DOCTYPE html> casing (and the whitespace between doctype and <html>)
   //   - any run of whitespace between tags can differ in both amount and kind
   //   - implicit <tbody>/</tbody> tags that the parser inserts where missing
-  //   - attribute reordering on the same opening tag
+  //   - HTML comments (skipped wholesale; '>' inside them is not a tag end)
+  //   - attribute reordering/quoting on the same opening tag (quote-aware, so
+  //     a '>' inside an attribute value doesn't read as the tag end)
   function mapNormToSource(targetNormPos, norm, source) {
     let n = 0, s = 0;
     const isWS = (ch) => ch === ' ' || ch === '\t' || ch === '\n' || ch === '\r' || ch === '\f';
@@ -176,6 +200,24 @@ window.FileOps = (function() {
     while (n < targetNormPos) {
       if (n < norm.length && s < source.length && norm.charCodeAt(n) === source.charCodeAt(s)) {
         n++; s++; continue;
+      }
+
+      // Character-reference divergence: the source kept an entity (&eacute;,
+      // &mdash;, &copy;, &#169;) where the parser decoded it to the literal
+      // character in norm. (amp/lt/gt/quot/nbsp survive serialization as
+      // entities on both sides, so they match char-for-char above and never
+      // reach here.) Decode the source entity and, if it matches the upcoming
+      // norm char(s), step over the entity in source and the char(s) in norm.
+      if (source[s] === '&') {
+        const m = /^&(?:#\d+|#x[\da-fA-F]+|[a-zA-Z][a-zA-Z0-9]*);/.exec(source.slice(s, s + 40));
+        if (m) {
+          const decoded = decodeEntity(m[0]);
+          if (decoded && norm.startsWith(decoded, n)) {
+            if (n + decoded.length > targetNormPos) return s; // target inside the entity — anchor at it
+            n += decoded.length; s += m[0].length;
+            continue;
+          }
+        }
       }
 
       // Whitespace divergence: skip whitespace on whichever side has it
@@ -190,8 +232,8 @@ window.FileOps = (function() {
       if (matchCI(norm, n, '<!doctype') && matchCI(source, s, '<!doctype')) {
         // Advance past the doctype declaration in both, up to and
         // including the '>'.
-        const ne = norm.indexOf('>', n);
-        const se = source.indexOf('>', s);
+        const ne = findGt(norm, n);
+        const se = findGt(source, s);
         if (ne < 0 || se < 0) return -1;
         if (n + (ne - n + 1) > targetNormPos) {
           // The target falls inside the doctype — clamp to start of doctype
@@ -199,6 +241,20 @@ window.FileOps = (function() {
           return s;
         }
         n = ne + 1; s = se + 1;
+        continue;
+      }
+
+      // HTML comments are preserved verbatim by the parser, so they normally
+      // match char-for-char and never reach here. But if a whitespace-only
+      // divergence parks us right at a '<!--', skip the whole comment on both
+      // sides — otherwise the tag-skip below would treat a '>' *inside* the
+      // comment as a tag end and lose alignment.
+      if (matchCI(norm, n, '<!--') && matchCI(source, s, '<!--')) {
+        const ne = norm.indexOf('-->', n);
+        const se = source.indexOf('-->', s);
+        if (ne < 0 || se < 0) return -1;
+        if (ne + 3 > targetNormPos) return s; // target falls inside the comment
+        n = ne + 3; s = se + 3;
         continue;
       }
 
@@ -214,8 +270,8 @@ window.FileOps = (function() {
       // the matching '>' on each side. Inside-attr quoting differences are
       // not the user's edit; we just have to keep alignment.
       if (norm[n] === '<' && source[s] === '<') {
-        const ne = norm.indexOf('>', n);
-        const se = source.indexOf('>', s);
+        const ne = findGt(norm, n);
+        const se = findGt(source, s);
         if (ne > n && se > s) {
           const nTag = norm.slice(n + 1, ne).split(/[\s/>]/)[0].toLowerCase();
           const sTag = source.slice(s + 1, se).split(/[\s/>]/)[0].toLowerCase();
@@ -227,10 +283,71 @@ window.FileOps = (function() {
         }
       }
 
+      // Tag-internal serialization difference: the divergence is *inside* an
+      // element's start tag rather than at its '<'. Covers self-closing void
+      // elements (`<meta …/>` → `<meta …>`), boolean attrs (`disabled` →
+      // `disabled=""`), and attribute reorder/quoting where the first differing
+      // char lands mid-tag (so char-matching already stepped past the '<').
+      // Only fire when BOTH sides are inside a tag, then re-converge just past
+      // each tag's closing '>'. origNorm is a faithful reparse of source, so
+      // the k-th tag corresponds on both sides — skipping to '>' stays aligned.
+      if (insideTag(norm, n) && insideTag(source, s)) {
+        const ne = findGt(norm, n);
+        const se = findGt(source, s);
+        if (ne >= n && se >= s) {
+          if (ne + 1 > targetNormPos) return source.lastIndexOf('<', s); // target inside this tag — anchor at tag start
+          n = ne + 1; s = se + 1;
+          continue;
+        }
+      }
+
       // Unknown divergence — bail out.
       return -1;
     }
     return s;
+  }
+
+  // True if `pos` sits inside an element start/end tag — i.e. scanning back we
+  // hit '<' before '>'. Used to tell a tag-internal divergence (attr/self-close
+  // differences) apart from a text divergence.
+  function insideTag(str, pos) {
+    for (let i = pos - 1; i >= 0; i--) {
+      const ch = str[i];
+      if (ch === '<') return true;
+      if (ch === '>') return false;
+    }
+    return false;
+  }
+
+  // Decode a single HTML entity string (e.g. "&mdash;") to its character.
+  // Cached because mapNormToSource may hit the same entity many times.
+  const _entCache = new Map();
+  const _entDiv = document.createElement('div');
+  function decodeEntity(ent) {
+    if (_entCache.has(ent)) return _entCache.get(ent);
+    _entDiv.innerHTML = ent;
+    const v = _entDiv.textContent;
+    _entCache.set(ent, v);
+    return v;
+  }
+
+  // Index of the '>' that closes the tag/declaration starting at `pos` (which
+  // points at '<'), skipping any '>' that sits inside a quoted attribute
+  // value. Returns -1 if unterminated. `indexOf('>')` is wrong here because
+  // values like title="a > b" contain a literal '>' that isn't the tag end.
+  function findGt(str, pos) {
+    let quote = null;
+    for (let i = pos; i < str.length; i++) {
+      const ch = str[i];
+      if (quote) {
+        if (ch === quote) quote = null;
+      } else if (ch === '"' || ch === "'") {
+        quote = ch;
+      } else if (ch === '>') {
+        return i;
+      }
+    }
+    return -1;
   }
 
   function matchCI(str, pos, needle) {
