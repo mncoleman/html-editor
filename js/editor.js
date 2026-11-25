@@ -21,6 +21,8 @@
     window.Tree.init();
     window.Properties.init();
     window.BlocksPanel.init();
+    window.Site.init();
+    window.Assets.init();
     window.FileOps.init();
     window.Keyboard.init();
 
@@ -58,6 +60,7 @@
       await window.FileOps.openLocalFile();
       if (ES.state.doc) showEditor();
     });
+    document.getElementById('empty-open-folder').addEventListener('click', () => window.Site.openFolder());
     document.getElementById('empty-import').addEventListener('click', () => {
       window.FileOps.promptImport();
     });
@@ -84,6 +87,7 @@
         a: 'empty-open-local',
         b: 'empty-import',
         c: 'empty-new',
+        d: 'empty-open-folder',
         r: 'empty-restore',
       };
       const id = map[e.key.toLowerCase()];
@@ -132,13 +136,23 @@
     document.getElementById('exit-preview-btn').addEventListener('click', () => setPreview(false));
     window.__heExitPreview = () => { if (isPreview) { setPreview(false); return true; } return false; };
 
-    document.getElementById('tb-external-preview').addEventListener('click', () => {
+    document.getElementById('tb-external-preview').addEventListener('click', async () => {
       const doc = ES.state.doc;
       if (!doc) return;
-      const html = '<!DOCTYPE html>\n' + doc.documentElement.outerHTML
-        .replace(/<style id="__he_styles__">[\s\S]*?<\/style>/g, '')
-        .replace(/\s+contenteditable="[^"]*"/g, '')
-        .replace(/\s+data-he-editing="[^"]*"/g, '');
+      // Site folder: serve the page from its real place in the folder so
+      // relative links, scripts and fetch() all work, with your unsaved edits.
+      if (window.Site.active()) {
+        const win = window.open('about:blank', '_blank');
+        // The preview runs the site's own scripts. Cut the link back to this
+        // tab so they can't reach the editor (and its folder access).
+        if (win) { try { win.opener = null; } catch (_) {} }
+        if (await window.Site.ensureController()) {
+          if (win) win.location.href = window.Site.previewUrl();
+          return;
+        }
+        if (win) win.close();
+      }
+      const html = ES.stripTraces(ES.serializeDoc(doc));
       const blob = new Blob([html], { type: 'text/html' });
       const url = URL.createObjectURL(blob);
       window.open(url, '_blank');
@@ -148,6 +162,7 @@
     document.getElementById('tb-open').addEventListener('click', async () => {
       await window.FileOps.openLocalFile();
     });
+    document.getElementById('tb-open-folder').addEventListener('click', () => window.Site.openFolder());
     document.getElementById('tb-refresh').addEventListener('click', () => window.FileOps.reloadFromDisk());
     document.getElementById('tb-diff').addEventListener('click', () => window.DiffViewer.showAgainstDisk());
     document.getElementById('tb-git-diff').addEventListener('click', () => window.GitDiff.showDiff());
@@ -214,9 +229,13 @@
     const autosaveTime = document.getElementById('autosave-time');
 
     ES.on((evt, payload) => {
-      if (evt === 'file-changed') {
-        fileName.textContent = ES.state.fileName + (ES.state.fileHandle ? ' (linked)' : ' (read-only)');
-        fileName.title = ES.state.fileHandle ? 'Live-linked to local file' : 'Imported — use Export or Save (download)';
+      if (evt === 'file-changed' || evt === 'site-changed') {
+        const name = ES.state.displayName || ES.state.fileName;
+        fileName.textContent = name + (ES.state.fileHandle ? ' (linked)' : ' (read-only)');
+        fileName.title = ES.state.fileHandle ? 'Live-linked to local file. ⌘S saves to disk.' : 'Not linked to a file on disk. Save downloads a copy (Export).';
+      }
+      if (evt === 'autosave-failed') {
+        autosaveTime.textContent = 'skipped (page too large for browser storage)';
       }
       if (evt === 'dirty-changed') {
         if (ES.state.dirty) {

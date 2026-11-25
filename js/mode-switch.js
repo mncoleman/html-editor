@@ -31,7 +31,7 @@ window.ModeSwitch = (function() {
     if (!opts.skipSync) {
       if (ES.state.mode === 'visual' && ES.state.doc) {
         // Snapshot current visual DOM into source buffer
-        const html = '<!DOCTYPE html>\n' + stripTraces(ES.state.doc.documentElement.outerHTML);
+        const html = stripTraces(ES.serializeDoc(ES.state.doc));
         ES.state.sourceHtml = html;
       } else if (ES.state.mode === 'source' && window.Source) {
         ES.state.sourceHtml = window.Source.getContent();
@@ -53,12 +53,7 @@ window.ModeSwitch = (function() {
     }
   }
 
-  function stripTraces(html) {
-    return html
-      .replace(/<style id="__he_styles__">[\s\S]*?<\/style>/g, '')
-      .replace(/\s+contenteditable="[^"]*"/g, '')
-      .replace(/\s+data-he-editing="[^"]*"/g, '');
-  }
+  function stripTraces(html) { return ES.stripTraces(html); }
 
   return { pickInitialMode, loadIntoInitialMode, setMode };
 })();

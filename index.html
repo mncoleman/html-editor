@@ -69,7 +69,9 @@
     "Device preview (desktop / tablet / mobile)",
     "Dark and light themes",
     "Diff vs. disk and diff vs. git HEAD",
-    "Source-code mode with CodeMirror"
+    "Source-code mode with CodeMirror",
+    "Open a whole site folder: linked CSS, images and pages render on the canvas",
+    "Add local images by drag-and-drop, paste, or upload"
   ]
 }
 </script>
@@ -102,6 +104,14 @@
       "acceptedAnswer": {
         "@type": "Answer",
         "text": "Live local file editing uses the File System Access API, supported by Chrome, Edge, Arc, and other Chromium-based browsers. Safari and Firefox fall back to import/export."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "How do I add my own images?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Drag image files onto the page, paste one with Cmd+V, or select an image and click Upload in the Style panel. With a site folder open, images are copied into the folder and linked with a relative path; with a single file they are embedded in the HTML."
       }
     },
     {
@@ -169,6 +179,12 @@
         <span>Open Local File</span>
         <small>Live link — saves to disk</small>
       </button>
+      <button class="btn" id="empty-open-folder" title="Open a whole website folder: linked CSS and images show up, new images are saved into the folder">
+        <kbd class="btn-shortcut">D</kbd>
+        <i data-lucide="folder-tree" class="icon"></i>
+        <span>Open Site Folder</span>
+        <small>CSS, images &amp; pages work</small>
+      </button>
       <button class="btn" id="empty-import">
         <kbd class="btn-shortcut">B</kbd>
         <i data-lucide="upload" class="icon"></i>
@@ -182,7 +198,7 @@
         <small>Empty page</small>
       </button>
     </div>
-    <div class="empty-drop-hint"><i data-lucide="mouse-pointer-2" class="hint-icon"></i> or drop an .html file anywhere</div>
+    <div class="empty-drop-hint"><i data-lucide="mouse-pointer-2" class="hint-icon"></i> or drop an .html file or a site folder anywhere</div>
     <div class="empty-shortcuts">
       <kbd>⌘S</kbd> save · <kbd>⌘Z</kbd> undo · <kbd>⌘D</kbd> duplicate · <kbd>Delete</kbd> remove · <kbd>Esc</kbd> deselect
     </div>
@@ -233,6 +249,18 @@
       <details>
         <summary>Which browsers are supported?</summary>
         <p>Any modern browser can use the visual editor with import/export. Live "save to disk" requires Chrome, Edge, Arc, or another Chromium-based browser with the File System Access API.</p>
+      </details>
+      <details>
+        <summary>How do I add my own images?</summary>
+        <p>Drag image files from Finder or Explorer onto the page, paste one with <kbd>⌘V</kbd>, or select an image and click <em>Upload</em> in the Style panel. Double-clicking an image on the page also replaces it. If you opened a <strong>site folder</strong>, new images are copied into it (into an existing <code>images/</code> or <code>img/</code> folder when there is one) and linked with a relative path. With a single file, images are embedded in the HTML, and big photos can be shrunk first.</p>
+      </details>
+      <details>
+        <summary>My page shows up unstyled or with broken images. Why?</summary>
+        <p>When you open a single <code>.html</code> file, the editor can't see the CSS, images, and fonts sitting next to it on your disk. Use <strong>Open Site Folder</strong> and pick the folder that holds your site. The page then renders with its stylesheets and images, links between pages open in the editor, and the new-tab preview runs your scripts.</p>
+      </details>
+      <details>
+        <summary>Can I edit a whole website, not just one page?</summary>
+        <p>Yes. Open the site folder, then switch pages from the <em>Assets</em> tab, or click a link while in Preview mode. In Chrome, Edge, and Arc, saving writes straight to the files. In Safari, Firefox, and Brave the folder opens read-only and Save downloads the page.</p>
       </details>
       <details>
         <summary>Do my files get uploaded anywhere?</summary>
@@ -297,7 +325,8 @@
     </div>
 
     <div class="toolbar-right">
-      <button class="tool-btn anim-press" id="tb-open" title="Open local file"><i data-lucide="folder-open"></i><span>Open</span></button>
+      <button class="tool-btn anim-press" id="tb-open" title="Open a single local .html file"><i data-lucide="folder-open"></i><span>Open</span></button>
+      <button class="tool-btn icon-only anim-press" id="tb-open-folder" title="Open a site folder: linked CSS, images and pages work, new images are copied into it"><i data-lucide="folder-tree"></i></button>
       <button class="tool-btn icon-only anim-press" id="tb-refresh" title="Refresh from disk — pull in external changes" disabled><i data-lucide="refresh-cw"></i></button>
       <button class="tool-btn icon-only anim-press" id="tb-diff" title="Show diff vs. file on disk" disabled><i data-lucide="git-compare-arrows"></i></button>
       <button class="tool-btn icon-only anim-press" id="tb-git-diff" title="Show diff vs. git HEAD (asks for repo directory)" disabled><i data-lucide="git-branch"></i></button>
@@ -335,6 +364,24 @@
 
       <!-- Assets tab -->
       <div class="tab-panel" data-panel="assets">
+        <div class="assets-section" id="site-section">
+          <div id="site-none">
+            <h3>Site folder</h3>
+            <p class="hint">Open your site's folder so its CSS and images show up and new images are saved as files next to your pages.</p>
+            <button class="btn-block" id="site-open-folder">Open site folder…</button>
+            <button class="btn-block site-reopen" id="site-reopen" hidden></button>
+          </div>
+          <div id="site-open" hidden>
+            <h3 class="site-title"><i data-lucide="folder-tree"></i><span id="site-name"></span></h3>
+            <h4 class="site-sub">Pages</h4>
+            <div id="site-pages" class="recent-list site-pages"></div>
+            <h4 class="site-sub">Images <span id="site-image-count"></span></h4>
+            <input type="search" id="site-image-filter" class="search-input" placeholder="Filter images…">
+            <div id="site-images" class="site-images"></div>
+          </div>
+          <button class="btn-block" id="site-add-images" title="Pick image files from your computer">+ Add images…</button>
+          <p class="hint site-tip">Tip: you can also drag images onto the page or paste with ⌘V. Double-click an image to replace it.</p>
+        </div>
         <div class="assets-section">
           <h3>Snippets</h3>
           <p class="hint">Saved blocks of your own</p>
@@ -420,6 +467,7 @@
 
 <!-- Hidden file inputs -->
 <input type="file" id="file-input" accept=".html,.htm" hidden>
+<input type="file" id="folder-input" webkitdirectory multiple hidden>
 
 <!-- Floating exit-preview button -->
 <button id="exit-preview-btn" class="exit-preview-btn" hidden>← Exit preview (P or Esc)</button>
@@ -437,6 +485,8 @@
 <script src="js/blocks-panel.js"></script>
 <script src="js/source.js"></script>
 <script src="js/mode-switch.js"></script>
+<script src="js/site.js"></script>
+<script src="js/assets.js"></script>
 <script src="js/file.js"></script>
 <script src="js/diff.js"></script>
 <script src="js/git.js"></script>

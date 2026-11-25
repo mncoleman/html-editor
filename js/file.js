@@ -20,20 +20,29 @@ window.FileOps = (function() {
       warn.hidden = false;
     }
 
-    // Drop on page (empty state)
+    // Drop anywhere on the page (outside the canvas): .html opens it, a
+    // folder opens it as a site, images go into the current page. Drops on
+    // the canvas itself are handled in canvas.js / assets.js.
     const drop = (e) => {
       e.preventDefault();
       e.stopPropagation();
       document.body.classList.remove('drag-over');
-      const file = e.dataTransfer.files && e.dataTransfer.files[0];
-      if (file && (file.name.endsWith('.html') || file.name.endsWith('.htm') || file.type === 'text/html')) {
-        importFile(file);
-      }
+      // DataTransfer is only readable synchronously, so grab everything now.
+      const dt = e.dataTransfer;
+      const files = Array.from((dt && dt.files) || []);
+      const items = Array.from((dt && dt.items) || []).filter(i => i.kind === 'file');
+      const handles = items.map(i => (typeof i.getAsFileSystemHandle === 'function' ? i.getAsFileSystemHandle() : null));
+      const entries = items.map(i => (typeof i.webkitGetAsEntry === 'function' ? i.webkitGetAsEntry() : null));
+      const uri = dt && (dt.getData('text/uri-list') || '');
+      handleDroppedThings({ files, handles, entries, uri });
     };
     document.addEventListener('dragover', (e) => {
-      if (e.dataTransfer.types && e.dataTransfer.types.includes('Files')) {
+      const types = (e.dataTransfer && e.dataTransfer.types) || [];
+      if (types.includes && types.includes('Files')) {
         e.preventDefault();
-        document.body.classList.add('drag-over');
+        // Full-page "drop here" overlay only on the start screen; in the
+        // editor the canvas shows exactly where an image will land.
+        if (document.getElementById('editor').hidden) document.body.classList.add('drag-over');
       }
     });
     document.addEventListener('dragleave', (e) => {
@@ -45,7 +54,7 @@ window.FileOps = (function() {
     const fileInput = document.getElementById('file-input');
     fileInput.addEventListener('change', (e) => {
       const f = e.target.files && e.target.files[0];
-      if (f) importFile(f);
+      if (f) confirmDiscard().then(ok => ok && importFile(f));
       fileInput.value = '';
     });
   }
@@ -56,26 +65,87 @@ window.FileOps = (function() {
       promptImport();
       return;
     }
+    let handle;
     try {
       // No `types` filter: Chrome's first-invocation behavior with
       // accept-maps can grey out matching files until the picker is
       // dismissed and reopened. Simpler to let the user pick any file.
-      const [handle] = await window.showOpenFilePicker({ multiple: false });
-      const file = await handle.getFile();
-      const text = await file.text();
-      ES.setFile(handle, file.name);
-      ES.state.sourceHtml = text;
-      lastKnownMtime = file.lastModified;
-      clearExternalChange();
-      await window.ModeSwitch.loadIntoInitialMode(text);
-      ES.addRecent(file.name);
-      toast(`Opened ${file.name} — changes will save to disk`, 'success');
-      ES.setDirty(false);
+      [handle] = await window.showOpenFilePicker({ multiple: false });
     } catch (e) {
       if (e.name !== 'AbortError') {
         console.error(e);
         toast('Could not open file: ' + e.message, 'error');
       }
+      return;
+    }
+    if (!(await confirmDiscard())) return;
+    await loadFromHandle(handle);
+  }
+
+  // Load a file handle as the linked document. Used by Open Local File and
+  // by site-folder mode (keepSite: the page belongs to the open folder).
+  async function loadFromHandle(handle, opts = {}) {
+    try {
+      if (!opts.keepSite && window.Site) window.Site.detach();
+      const file = await handle.getFile();
+      const text = await file.text();
+      ES.setFile(handle, file.name, opts.displayName);
+      ES.state.sourceHtml = text;
+      lastKnownMtime = file.lastModified;
+      clearExternalChange();
+      await window.ModeSwitch.loadIntoInitialMode(text);
+      ES.addRecent(opts.displayName || file.name);
+      if (!opts.keepSite) toast(`Opened ${file.name}. Changes will save to disk`, 'success');
+      ES.setDirty(false);
+      return true;
+    } catch (e) {
+      console.error(e);
+      toast('Could not open file: ' + e.message, 'error');
+      return false;
+    }
+  }
+
+  // Ask before replacing a document that has unsaved edits.
+  async function confirmDiscard() {
+    if (!ES.state.dirty || !ES.state.doc) return true;
+    return window.Dialog.confirm({
+      title: 'Unsaved changes',
+      message: `Opening another file replaces ${ES.state.fileName}, and your unsaved edits will be lost. Save first with ⌘S if you want to keep them.`,
+      confirmLabel: 'Discard and open',
+      cancelLabel: 'Cancel',
+      danger: true,
+    });
+  }
+
+  async function handleDroppedThings({ files, handles, entries, uri }) {
+    // A folder? Open it as a site.
+    for (let i = 0; i < handles.length; i++) {
+      let h = null;
+      try { h = handles[i] ? await handles[i] : null; } catch (_) { h = null; }
+      if (h && h.kind === 'directory') { await window.Site.openFromHandle(h); return; }
+    }
+    if (!handles.some(Boolean)) {
+      const dirEntry = entries.find(en => en && en.isDirectory);
+      if (dirEntry) { await window.Site.openFromEntry(dirEntry); return; }
+    }
+    const html = files.find(f => /\.html?$/i.test(f.name) || f.type === 'text/html');
+    if (html) {
+      if (!(await confirmDiscard())) return;
+      await importFile(html);
+      return;
+    }
+    const images = files.filter(f => window.Assets && window.Assets.isImageFile(f));
+    if (images.length || (!files.length && uri)) {
+      if (!ES.state.doc || document.getElementById('editor').hidden) {
+        toast('Open a page first, then drop images onto it.', 'warn');
+        return;
+      }
+      if (images.length) await window.Assets.insertFiles(images, null);
+      else await window.Assets.insertUrl(uri, null);
+      return;
+    }
+    if (files.length) {
+      toast(`Can't open ${files[0].name}. Drop an .html file, a site folder, or images.`, 'warn');
     }
   }
 
@@ -83,17 +153,20 @@ window.FileOps = (function() {
     document.getElementById('file-input').click();
   }
 
-  async function importFile(file) {
+  async function importFile(file, opts = {}) {
     try {
+      if (!opts.keepSite && window.Site) window.Site.detach();
       const text = await file.text();
-      ES.setFile(null, file.name);
+      ES.setFile(null, file.name, opts.displayName);
       ES.state.sourceHtml = text;
       await window.ModeSwitch.loadIntoInitialMode(text);
-      ES.addRecent(file.name);
-      toast(`Imported ${file.name} (read-only — use Export to save)`, '');
+      ES.addRecent(opts.displayName || file.name);
+      if (!opts.keepSite) toast(`Imported ${file.name} (read-only, use Export to save)`, '');
       ES.setDirty(false);
+      return true;
     } catch (e) {
       toast('Could not import: ' + e.message, 'error');
+      return false;
     }
   }
 
@@ -112,7 +185,7 @@ window.FileOps = (function() {
     }
     if (!ES.state.doc) return ES.state.sourceHtml || '';
     if (!ES.state.dirty && ES.state.sourceHtml) return ES.state.sourceHtml;
-    let serialized = stripEditorTraces('<!DOCTYPE html>\n' + ES.state.doc.documentElement.outerHTML);
+    let serialized = stripEditorTraces(ES.serializeDoc(ES.state.doc));
     if (ES.state.sourceHtml) {
       // Splice the user's edit back into the original source so untouched
       // regions stay byte-identical (preserves doctype casing, original
@@ -153,7 +226,7 @@ window.FileOps = (function() {
     try { origDoc = new DOMParser().parseFromString(sourceHtml, 'text/html'); }
     catch (_) { return null; }
     if (!origDoc || !origDoc.documentElement) return null;
-    const origNorm = stripEditorTraces('<!DOCTYPE html>\n' + origDoc.documentElement.outerHTML);
+    const origNorm = stripEditorTraces(ES.serializeDoc(origDoc));
 
     if (origNorm === curNorm) return sourceHtml;
 
@@ -387,7 +460,11 @@ window.FileOps = (function() {
       // Only useful if the entity actually decoded to something different
       // (e.g. an unknown entity stays literal) and we don't already have
       // a mapping for this char.
-      if (ch && ch !== entity && !map.has(ch)) map.set(ch, entity);
+      // Never map ASCII: a source that writes `&#34;` or `&#39;` somewhere
+      // (template engines do) would otherwise get every quote in the edited
+      // region, including attribute delimiters and script text, rewritten
+      // into an entity, which breaks the markup.
+      if (ch && ch !== entity && !map.has(ch) && !(ch.length === 1 && ch.charCodeAt(0) < 0x80)) map.set(ch, entity);
     }
     entityMapCache = { src: sourceHtml, map };
     return map;
@@ -501,13 +578,7 @@ window.FileOps = (function() {
     }
   }
 
-  function stripEditorTraces(html) {
-    // Remove the injected editor styles and any contenteditable attrs/data flags
-    return html
-      .replace(/<style id="__he_styles__">[\s\S]*?<\/style>/g, '')
-      .replace(/\s+contenteditable="[^"]*"/g, '')
-      .replace(/\s+data-he-editing="[^"]*"/g, '');
-  }
+  function stripEditorTraces(html) { return ES.stripTraces(html); }
 
   async function newBlank() {
     const blank = `<!DOCTYPE html>
@@ -526,6 +597,7 @@ h1 { font-size: 32px; }
 <p>Start editing — click anything to select, double-click to edit text, drag blocks from the sidebar.</p>
 </body>
 </html>`;
+    if (window.Site) window.Site.detach();
     ES.setFile(null, 'untitled.html');
     ES.state.sourceHtml = blank;
     await window.ModeSwitch.loadIntoInitialMode(blank);
@@ -632,5 +704,5 @@ h1 { font-size: 32px; }
     }
   });
 
-  return { init, openLocalFile, promptImport, importFile, save, exportFile, newBlank, reloadFromDisk, checkExternalChanges, currentHtml, supportsFSA };
+  return { init, openLocalFile, loadFromHandle, confirmDiscard, promptImport, importFile, save, exportFile, newBlank, reloadFromDisk, checkExternalChanges, currentHtml, supportsFSA };
 })();

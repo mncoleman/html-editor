@@ -30,13 +30,45 @@ window.EditorState = (function() {
 
   function on(fn) { state.listeners.add(fn); return () => state.listeners.delete(fn); }
 
+  // Serialize a whole Document: doctype (as written), any comments before or
+  // after <html>, and the root element. documentElement.outerHTML alone
+  // drops those, which made save rewrite the top of files that have them
+  // (HTML5 Boilerplate conditional comments, "saved from url" comments).
+  function serializeDoc(doc) {
+    const parts = [];
+    for (const n of doc.childNodes) {
+      if (n.nodeType === 10) {
+        let dt = '<!DOCTYPE ' + n.name;
+        if (n.publicId) dt += ` PUBLIC "${n.publicId}"`;
+        if (n.systemId) dt += (n.publicId ? '' : ' SYSTEM') + ` "${n.systemId}"`;
+        parts.push(dt + '>');
+      } else if (n.nodeType === 8) {
+        parts.push('<!--' + n.data + '-->');
+      } else if (n.nodeType === 1) {
+        parts.push(n.outerHTML);
+      }
+    }
+    return parts.join('\n');
+  }
+
+  // Remove everything the editor injects into the canvas document: its
+  // selection styles, the site-folder <base>, and inline-edit flags. Every
+  // path that turns the canvas DOM into user-facing HTML must go through this.
+  function stripTraces(html) {
+    return html
+      .replace(/<style id="__he_styles__">[\s\S]*?<\/style>/g, '')
+      .replace(/<base id="__he_base__"[^>]*>/g, '')
+      .replace(/\s+contenteditable="[^"]*"/g, '')
+      .replace(/\s+data-he-editing="[^"]*"/g, '');
+  }
+
   // Snapshot the current canvas document for undo.
   // Dedupes against the most recent snapshot (no-op edits don't grow the
   // stack), and enforces both a count cap and a total-bytes cap so that
   // long sessions on large documents don't balloon memory.
   function snapshot(label = '') {
     if (!state.doc) return;
-    const html = state.doc.documentElement.outerHTML;
+    const html = serializeDoc(state.doc);
     const top = state.undoStack[state.undoStack.length - 1];
     if (top && top.html === html) {
       // Edit produced an identical serialization — nothing to push, but
@@ -132,7 +164,7 @@ window.EditorState = (function() {
     state.redoStack = [];
     state.historyBytes = 0;
     if (doc) {
-      const html = doc.documentElement.outerHTML;
+      const html = serializeDoc(doc);
       state.undoStack.push({
         html, selPath: null, label: 'initial', at: Date.now(), bytes: html.length
       });
@@ -159,9 +191,10 @@ window.EditorState = (function() {
     emit('dirty-changed', d);
   }
 
-  function setFile(handle, name) {
+  function setFile(handle, name, displayName) {
     state.fileHandle = handle;
     state.fileName = name || (handle && handle.name) || 'untitled.html';
+    state.displayName = displayName || state.fileName;
     emit('file-changed');
   }
 
@@ -176,7 +209,7 @@ window.EditorState = (function() {
           html = (window.Source && window.Source.getContent()) || state.sourceHtml || '';
         } else {
           if (!state.doc) return;
-          html = state.doc.documentElement.outerHTML;
+          html = stripTraces(serializeDoc(state.doc));
         }
         if (!html) return;
         localStorage.setItem('html-editor.autosave', html);
@@ -184,7 +217,11 @@ window.EditorState = (function() {
         localStorage.setItem('html-editor.autosave.at', String(Date.now()));
         state.lastAutosave = Date.now();
         emit('autosaved');
-      } catch (e) { /* quota exceeded — ignore */ }
+      } catch (e) {
+        // Quota exceeded (usually big embedded images). Editing is unaffected,
+        // but say so instead of failing silently.
+        emit('autosave-failed');
+      }
     }, 2000);
   }
 
@@ -243,7 +280,7 @@ window.EditorState = (function() {
   }
 
   return {
-    state, on, emit,
+    state, on, emit, stripTraces, serializeDoc,
     snapshot, undo, redo,
     setDoc, select, deselect,
     setDirty, setFile,

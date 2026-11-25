@@ -6,6 +6,9 @@ window.Canvas = (function() {
   let isPreview = false;
   let dragData = null; // { type: 'block'|'move', payload, ghostEl? }
   let iframeMutationObserver = null; // disconnected before re-attach on doc-replaced
+  let loadSeq = 0;                   // guards against overlapping loadHtml calls
+  const wiredBodies = new WeakSet(); // a body gets its listeners exactly once
+  let internalNativeDrag = false;    // a native drag that started inside the canvas
 
   // Inject styles into the iframe so editor selection works
   const IFRAME_STYLES = `
@@ -52,12 +55,20 @@ window.Canvas = (function() {
     // Listen for drops on canvas wrap from external block drags
     const canvasWrap = document.querySelector('.canvas-wrap');
     canvasWrap.addEventListener('dragover', (e) => {
-      if (!dragData) return;
+      if (!dragData && !isExternalDrag(e)) return;
       e.preventDefault();
       e.dataTransfer.dropEffect = 'copy';
-      updateDropTarget(e.clientX, e.clientY);
+      updateDropTarget(e.clientX, e.clientY, !dragData);
     });
     canvasWrap.addEventListener('drop', (e) => {
+      if (!dragData && isExternalDrag(e)) {
+        // Files or a URL dropped in the margin around the page: treat it
+        // like a canvas drop at the last indicated spot.
+        e.preventDefault();
+        e.stopPropagation();
+        externalDrop(e);
+        return;
+      }
       if (!dragData) return;
       e.preventDefault();
       handleDrop(e.clientX, e.clientY);
@@ -79,17 +90,39 @@ window.Canvas = (function() {
   function clearDragData() { dragData = null; hideDropIndicator(); }
   function getDragData() { return dragData; }
 
+  // Load HTML into the canvas. The frame is navigated exactly once, to a
+  // blank srcdoc; after that every load writes into the same frame window
+  // with document.open/write, which is also how undo restores snapshots.
+  //   - The site-folder responder (Site.attachResponder) is installed on
+  //     that window before any content is written, so the page's first CSS
+  //     and image requests get answered.
+  //   - Re-navigating the frame on every load pushed a session-history
+  //     entry each time, and the browser Back button then blanked the canvas.
+  let frameReady = false;
   function loadHtml(html) {
     if (!html || !html.trim()) {
       html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Untitled</title></head><body></body></html>';
     }
-    iframe.srcdoc = html;
-    iframe.onload = () => {
+    if (window.Site) html = window.Site.injectBase(html);
+    const seq = ++loadSeq;
+    const write = () => {
+      if (seq !== loadSeq) return;
+      if (window.Site) window.Site.attachResponder(iframe.contentWindow);
       const doc = iframe.contentDocument;
+      doc.open();
+      doc.write(html);
+      doc.close();
       injectEditorStyles(doc);
-      ES.setDoc(doc);
-      wireIframeEvents();
+      ES.setDoc(doc); // emits doc-changed, which wires the iframe events
+      if (window.Site) window.Site.checkFrame(iframe.contentWindow);
     };
+    if (frameReady && iframe.contentDocument) { write(); return; }
+    iframe.onload = () => {
+      iframe.onload = null;
+      frameReady = true;
+      write();
+    };
+    iframe.srcdoc = '<!DOCTYPE html><html><head></head><body></body></html>';
   }
 
   function injectEditorStyles(doc) {
@@ -106,6 +139,10 @@ window.Canvas = (function() {
     if (!doc.getElementById('__he_styles__') && doc.head) injectEditorStyles(doc);
     const body = doc.body;
     if (!body) return;
+    // doc-changed and doc-replaced can both fire for the same document; wire
+    // each body once so handlers (drops, paste) never run twice.
+    if (wiredBodies.has(body)) return;
+    wiredBodies.add(body);
 
     // Click to select. Also intercepts ALL link clicks defensively, in both
     // edit and preview mode, so the iframe content can't escape to the
@@ -143,6 +180,7 @@ window.Canvas = (function() {
       if (target.isContentEditable) return; // already editing — native word-select handles it
       e.preventDefault();
       e.stopPropagation();
+      if (target.tagName === 'IMG' && window.Assets) { ES.select(target); window.Assets.replaceImage(target); return; }
       enterTextEdit(target, e);
     }, true);
 
@@ -198,19 +236,37 @@ window.Canvas = (function() {
       lastHoverTarget = null;
     }, true);
 
-    // dragover/drop inside iframe for blocks coming from sidebar
+    // dragover/drop inside iframe: blocks from the sidebar, plus image files
+    // from Finder/Explorer and image URLs dragged from other tabs.
+    doc.addEventListener('dragstart', () => { internalNativeDrag = true; }, true);
+    doc.addEventListener('dragend', () => { internalNativeDrag = false; }, true);
     doc.addEventListener('dragover', (e) => {
-      if (!dragData) return;
+      if (!dragData && !isExternalDrag(e)) return;
       e.preventDefault();
+      if (!dragData) e.dataTransfer.dropEffect = 'copy';
       const rect = iframe.getBoundingClientRect();
-      updateDropTarget(rect.left + e.clientX, rect.top + e.clientY);
+      updateDropTarget(rect.left + e.clientX, rect.top + e.clientY, !dragData);
     });
     doc.addEventListener('drop', (e) => {
+      if (!dragData && isExternalDrag(e)) {
+        e.preventDefault();
+        e.stopPropagation();
+        const rect = iframe.getBoundingClientRect();
+        updateDropTarget(rect.left + e.clientX, rect.top + e.clientY, true);
+        externalDrop(e);
+        return;
+      }
       if (!dragData) return;
       e.preventDefault();
       const rect = iframe.getBoundingClientRect();
       handleDrop(rect.left + e.clientX, rect.top + e.clientY);
     });
+    doc.addEventListener('dragleave', (e) => {
+      if (!e.relatedTarget && !dragData) hideDropIndicator();
+    });
+
+    // Paste an image (screenshot, copied file) straight onto the page.
+    doc.addEventListener('paste', (e) => { if (window.Assets) window.Assets.handlePaste(e); });
 
     // Track any DOM mutations for autosave (excluding our editor-style
     // injections). The observer can fire many times per frame for big
@@ -256,8 +312,16 @@ window.Canvas = (function() {
       window.open(href, '_blank', 'noopener,noreferrer');
       return;
     }
-    // Relative URLs (./other.html, /path/, etc.) — ignored in preview;
-    // they'd otherwise resolve against about:srcdoc which is meaningless.
+    // Relative URLs: in a site folder, a link to another page in the folder
+    // opens that page in the editor. Otherwise ignored (there's nothing to
+    // resolve them against).
+    if (window.Site && window.Site.active()) {
+      const path = window.Site.resolveFromPage(href.split('#')[0].split('?')[0]);
+      const pages = window.Site.listPages();
+      const target = path && (pages.includes(path) ? path
+        : pages.find(p => p === path.replace(/\/?$/, '/index.html').replace(/^\//, '')));
+      if (target) window.Site.openPage(target);
+    }
   }
 
   function enterTextEdit(el, mouseEvent) {
@@ -565,7 +629,37 @@ window.Canvas = (function() {
   // ---- Drop handling ----
   let lastDropTarget = null; // { el, position: 'before'|'after'|'inside' }
 
-  function updateDropTarget(clientX, clientY) {
+  // A drag from outside the editor carrying files or a URL (not one of our
+  // own block/tree drags, and not an image dragged around inside the canvas).
+  function isExternalDrag(e) {
+    if (internalNativeDrag || !e.dataTransfer) return false;
+    const types = Array.from(e.dataTransfer.types || []);
+    return types.includes('Files') || types.includes('text/uri-list');
+  }
+
+  function externalDrop(e) {
+    const dt = e.dataTransfer;
+    const files = Array.from(dt.files || []);
+    const uri = (dt.getData('text/uri-list') || '').split(/\r?\n/).find(l => l && !l.startsWith('#')) || '';
+    const target = lastDropTarget;
+    hideDropIndicator();
+    lastDropTarget = null;
+    if (!window.Assets) return;
+    const images = files.filter(f => window.Assets.isImageFile(f));
+    if (images.length) { window.Assets.insertFiles(images, target); return; }
+    const html = files.find(f => /\.html?$/i.test(f.name));
+    if (html) {
+      window.FileOps.confirmDiscard().then(ok => ok && window.FileOps.importFile(html));
+      return;
+    }
+    if (files.length) {
+      window.Assets.toast(`Can't insert ${files[0].name}. Only images can be dropped onto the page.`, 'warn');
+      return;
+    }
+    if (uri) window.Assets.insertUrl(uri, target);
+  }
+
+  function updateDropTarget(clientX, clientY, external) {
     const doc = ES.state.doc;
     if (!doc) return;
     const fr = iframe.getBoundingClientRect();
@@ -594,7 +688,10 @@ window.Canvas = (function() {
     const localY = iframeY - rect.top;
     const localX = iframeX - rect.left;
     let position;
-    if (canContain(target)) {
+    if (external && target.tagName === 'IMG') {
+      // Dropping an image onto an image replaces it.
+      position = 'inside';
+    } else if (canContain(target)) {
       // Use thirds: top third = before, middle = inside, bottom = after
       if (localY < rect.height / 3) position = 'before';
       else if (localY > rect.height * 2 / 3) position = 'after';
@@ -705,6 +802,6 @@ window.Canvas = (function() {
   return {
     init, loadHtml, setDragData, clearDragData, getDragData, updateOverlay,
     deleteSelected, duplicateSelected, moveSelected, setPreview, setDevice,
-    insertElement,
+    insertElement, hideDropIndicator,
   };
 })();

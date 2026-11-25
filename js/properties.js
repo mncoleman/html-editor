@@ -38,6 +38,8 @@ window.Properties = (function() {
     const cs = el.ownerDocument.defaultView.getComputedStyle(el);
     styleEl.innerHTML = '';
 
+    if (el.tagName === 'IMG') styleEl.appendChild(imageGroup(el));
+
     styleEl.appendChild(group('Typography', [
       selectRow('Font', cs.fontFamily.split(',')[0].replace(/['"]/g, ''), [
         'inherit','system-ui','-apple-system, sans-serif','Helvetica, Arial, sans-serif',
@@ -68,7 +70,7 @@ window.Properties = (function() {
 
     styleEl.appendChild(group('Background', [
       colorRow('Color', rgbToHex(cs.backgroundColor), v => setStyle(el, 'background-color', v)),
-      textRow('Image', extractUrl(cs.backgroundImage), v => setStyle(el, 'background-image', v ? `url("${v}")` : '')),
+      bgImageRow(el, cs),
       selectRow('Size', cs.backgroundSize, ['auto','cover','contain'], v => setStyle(el, 'background-size', v)),
       selectRow('Position', cs.backgroundPosition, ['left top','center','right top','center bottom'], v => setStyle(el, 'background-position', v)),
     ]));
@@ -86,6 +88,118 @@ window.Properties = (function() {
       textRow('Transform', el.style.transform || '', v => setStyle(el, 'transform', v)),
       textRow('Cursor', cs.cursor, v => setStyle(el, 'cursor', v)),
     ]));
+  }
+
+  // Image section, shown first when an <img> is selected.
+  function imageGroup(el) {
+    const g = group('Image', []);
+    g.classList.add('image-group');
+
+    const src = el.getAttribute('src') || '';
+    const isData = /^data:/i.test(src);
+    const preview = document.createElement('div');
+    preview.className = 'img-preview';
+    const thumb = document.createElement('img');
+    thumb.alt = '';
+    thumb.src = el.currentSrc || el.src || '';
+    preview.appendChild(thumb);
+    const meta = document.createElement('span');
+    meta.className = 'img-meta';
+    meta.textContent = el.naturalWidth ? `${el.naturalWidth} × ${el.naturalHeight}` : (src ? 'not loading' : 'no image');
+    if (src && !el.naturalWidth && !isData && !window.Site.active() && !/^(https?:)?\/\//i.test(src)) {
+      meta.title = 'Relative paths only load when you open the site folder (Open Site Folder).';
+      meta.textContent += ' (open the site folder to see it)';
+    }
+    preview.appendChild(meta);
+    g.appendChild(preview);
+
+    const urlInp = document.createElement('input');
+    urlInp.type = 'text';
+    urlInp.placeholder = isData ? `Embedded image (${Math.round(src.length * 0.75 / 1024)} KB). Type a URL to replace it` : 'https://… or images/photo.jpg';
+    urlInp.value = isData ? '' : src;
+    urlInp.addEventListener('change', () => {
+      const v = urlInp.value.trim();
+      if (!v && isData) return;
+      if (v) window.Assets.setImageSrc(el, v); else el.removeAttribute('src');
+      ES.snapshot('attr');
+      render();
+    });
+    g.appendChild(row('URL', urlInp));
+
+    const btns = document.createElement('div');
+    btns.className = 'btn-row img-actions';
+    const up = document.createElement('button');
+    up.className = 'btn-block';
+    up.textContent = 'Upload…';
+    up.title = window.Site.active() && window.Site.active().writable
+      ? 'Pick a file: it is copied into your site folder and linked here'
+      : 'Pick a file: it is embedded in the page (open a site folder to save it as a file instead)';
+    up.addEventListener('click', () => window.Assets.replaceImage(el));
+    btns.appendChild(up);
+    if (window.Site.active()) {
+      const pick = document.createElement('button');
+      pick.className = 'btn-block';
+      pick.textContent = 'From folder…';
+      pick.title = 'Show the folder\'s images in the Assets tab. Click one to use it here.';
+      pick.addEventListener('click', () => {
+        const tab = document.querySelector('.left-sidebar .tab[data-tab="assets"]');
+        if (tab) tab.click();
+        const f = document.getElementById('site-image-filter');
+        if (f) f.focus();
+      });
+      btns.appendChild(pick);
+    }
+    g.appendChild(btns);
+
+    const altInp = document.createElement('input');
+    altInp.type = 'text';
+    altInp.placeholder = 'Describe the image for screen readers';
+    altInp.value = el.getAttribute('alt') || '';
+    altInp.addEventListener('change', () => { el.setAttribute('alt', altInp.value); ES.snapshot('attr'); });
+    g.appendChild(row('Alt text', altInp));
+
+    const hint = document.createElement('p');
+    hint.className = 'prop-hint';
+    hint.textContent = 'Or drop an image file onto this one, or double-click it on the page.';
+    g.appendChild(hint);
+    return g;
+  }
+
+  function bgImageRow(el, cs) {
+    const wrap = document.createElement('div');
+    wrap.className = 'input-with-btn';
+    const inp = document.createElement('input');
+    inp.type = 'text';
+    inp.value = displayUrl(extractUrl(cs.backgroundImage));
+    inp.placeholder = 'none';
+    inp.addEventListener('change', () => {
+      if (inp.value === '(embedded image)') return;
+      setStyle(el, 'background-image', inp.value ? `url("${inp.value.replace(/"/g, '%22')}")` : '');
+    });
+    const btn = document.createElement('button');
+    btn.className = 'tool-btn';
+    btn.textContent = 'Upload';
+    btn.title = 'Use an image file from your computer as the background';
+    btn.addEventListener('click', async () => {
+      const url = await window.Assets.pickImageUrl();
+      if (!url) return;
+      setStyle(el, 'background-image', `url("${url}")`);
+      render();
+    });
+    wrap.appendChild(inp);
+    wrap.appendChild(btn);
+    return row('Image', wrap);
+  }
+
+  // Computed URLs in a site folder point at the editor's virtual paths;
+  // show them relative to the page instead.
+  function displayUrl(u) {
+    if (!u || /^data:/i.test(u)) return /^data:/i.test(u || '') ? '(embedded image)' : u;
+    const m = u.match(/\/__site__\/[0-9a-f]+\/(.*)$/);
+    if (m && window.Site.active()) {
+      try { return window.Site.relFromPage(m[1].split('/').map(decodeURIComponent).join('/')); } catch (_) {}
+    }
+    return u;
   }
 
   function isFlexOrGrid(d) { return /(flex|grid)/.test(d); }

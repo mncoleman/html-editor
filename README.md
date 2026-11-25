@@ -20,6 +20,22 @@ A free, browser-based visual HTML editor. Drop in any `.html` file, edit it visu
 - **Device preview** — desktop / tablet / mobile frames.
 - **Preview mode** — hides editor chrome to see the page as a visitor would.
 - **Dark and light themes.**
+- **Site folders**: open a whole website folder so linked CSS, images, fonts and other pages work on the canvas, and the new-tab preview runs your scripts.
+- **Your own images**: drag image files onto the page, paste with `⌘V`, or use Upload in the Style panel. With a site folder they're copied into it and linked; otherwise they're embedded in the HTML.
+
+## Adding images
+
+| You have | What happens |
+| --- | --- |
+| A **site folder** open (Chrome/Edge/Arc) | The image is copied into your existing `images/`, `img/` or `assets/` folder (or a new `images/`) and linked with a relative path. Nothing is overwritten; if the exact file is already in the folder it's reused. |
+| A site folder open read-only (Safari/Firefox/Brave) | Files already in the folder are linked; new images are embedded. |
+| A **single file** | The image is embedded as a data URI. Large photos can be shrunk to 1600px first. |
+
+Ways in: drop files on the page (drop onto an image to replace it), paste, double-click an image, the Image section of the Style panel, or the Assets tab. Typing any URL into the Image URL field works too.
+
+## Site folders
+
+Click **Open Site Folder** (or drop a folder on the window). The editor injects a `<base>` into the canvas (never into your file) and a small service worker (`sw.js`) hands the page's requests for CSS, images and fonts to the folder, so relative paths, root paths like `/css/site.css`, and pages in subfolders render as they would on a server. Switch pages from the Assets tab or by clicking links in Preview mode. Scripts stay off while you edit (so they can't rewrite the page you're saving); the external-preview button opens the page with scripts running. In Brave, live saving needs `brave://flags/#file-system-access-api`; without it the folder opens read-only.
 
 ## Keyboard shortcuts
 
@@ -32,7 +48,8 @@ A free, browser-based visual HTML editor. Drop in any `.html` file, edit it visu
 | `Esc` | Deselect |
 | `⌘↑` / `⌘↓` | Move selection up / down |
 | `P` | Toggle preview mode |
-| Double-click | Edit text inline |
+| `⌘V` | Paste an image from the clipboard |
+| Double-click | Edit text inline (on an image: replace it) |
 
 ## How it works
 
@@ -66,6 +83,9 @@ js/tree.js              — DOM tree panel + status-bar breadcrumbs
 js/properties.js        — style/attributes/HTML tabs
 js/blocks-panel.js      — blocks sidebar + snippets/recent files
 js/file.js              — File System Access API, import/export
+js/site.js              — site-folder mode (folder access, file index, page switching)
+js/assets.js            — image import, drop/paste, Site panel
+sw.js                   — service worker that serves the open folder's files to the canvas
 js/keyboard.js          — global shortcuts
 js/editor.js            — bootstrap, toolbar wiring, empty state
 ```

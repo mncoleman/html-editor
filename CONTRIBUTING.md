@@ -28,6 +28,9 @@ js/tree.js              DOM tree panel + breadcrumbs
 js/properties.js        style / attrs / HTML tabs
 js/blocks-panel.js      blocks sidebar + snippets/recents
 js/file.js              File System Access API + import/export
+js/site.js              site-folder mode: folder access, file index, <base> injection, serving files to sw.js
+js/assets.js            image import (copy into folder or embed), drop/paste, Site panel
+sw.js                   service worker that routes the canvas's CSS/image/font requests to the open folder
 js/keyboard.js          global shortcuts
 js/editor.js            bootstrap & toolbar wiring
 ```
@@ -70,6 +73,10 @@ Call `setStyle(el, 'css-property', value)` from `onChange` — that handles snap
 ### Add a keyboard shortcut
 
 Edit `js/keyboard.js`. `isInField()` filters out events fired while typing in an input.
+
+### Anything that serializes the canvas
+
+The canvas document carries editor-only markup (`<style id="__he_styles__">`, the site-folder `<base id="__he_base__">`, `contenteditable`). Any code that turns the canvas DOM into HTML for the user (save, export, diff, autosave, preview) must pass it through `EditorState.stripTraces()`.
 
 ### Change a theme color
 
