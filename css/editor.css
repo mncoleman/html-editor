@@ -387,13 +387,18 @@ html[data-theme="dark"] .empty-actions .btn-primary:hover { filter: brightness(0
 /* ---------- Editor layout ---------- */
 .editor {
   display: grid;
-  grid-template-rows: var(--toolbar-h) 1fr var(--statusbar-h);
+  /* minmax(0, …): long breadcrumbs or a crowded toolbar must never widen
+     the layout past the window (that pushed the right panel off-screen). */
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: var(--toolbar-h) minmax(0, 1fr) var(--statusbar-h);
   height: 100vh;
 }
 
 /* ---------- Toolbar ---------- */
 .toolbar {
   display: flex;
+  min-width: 0;
+  overflow: hidden;
   align-items: center;
   justify-content: space-between;
   padding: 0 12px;
@@ -406,6 +411,17 @@ html[data-theme="dark"] .empty-actions .btn-primary:hover { filter: brightness(0
   display: flex;
   align-items: center;
   gap: 4px;
+  min-width: 0;
+}
+.toolbar-left { flex: 0 1 auto; }
+.toolbar-center, .toolbar-right { flex: 0 0 auto; }
+.file-info { min-width: 0; }
+/* Narrow windows: drop button labels before anything gets clipped */
+@media (max-width: 1360px) {
+  .toolbar-right .tool-btn:not(.primary) > span { display: none; }
+}
+@media (max-width: 1100px) {
+  .brand-text { display: none; }
 }
 .brand {
   display: inline-flex;
@@ -498,7 +514,7 @@ html[data-theme="dark"] .empty-actions .btn-primary:hover { filter: brightness(0
 /* ---------- Workspace ---------- */
 .workspace {
   display: grid;
-  grid-template-columns: var(--sidebar-w) 1fr var(--sidebar-r-w);
+  grid-template-columns: var(--sidebar-w) minmax(0, 1fr) var(--sidebar-r-w);
   min-height: 0;
   overflow: hidden;
 }
@@ -1085,6 +1101,8 @@ body[data-mode="source"] .workspace { grid-template-columns: 1fr; }
 /* ---------- Status bar ---------- */
 .statusbar {
   display: flex;
+  min-width: 0;
+  overflow: hidden;
   align-items: center;
   justify-content: space-between;
   padding: 0 12px;
@@ -1096,6 +1114,8 @@ body[data-mode="source"] .workspace { grid-template-columns: 1fr; }
 .breadcrumbs {
   font-family: var(--mono);
   display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
   align-items: center;
   gap: 4px;
   overflow: hidden;
@@ -1708,3 +1728,6 @@ html[data-theme="dark"] .seo-content {
 .input-with-btn { display: flex; gap: 4px; min-width: 0; }
 .input-with-btn input { flex: 1; min-width: 0; }
 .input-with-btn .tool-btn { padding: 2px 8px; font-size: 11px; }
+.site-root-row { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 8px; margin: 8px 0 0; font-size: 11px; color: var(--text-faint); }
+.site-root-row[hidden] { display: none; }
+.site-root-row select { min-width: 0; font-size: 11px; padding: 4px 6px; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: var(--radius-sm); }

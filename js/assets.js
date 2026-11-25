@@ -257,9 +257,28 @@ window.Assets = (function() {
     renderImages();
   }
 
+  function renderRoot() {
+    const sel = document.getElementById('site-root');
+    if (!sel) return;
+    const site = window.Site.active();
+    const choices = window.Site.rootChoices();
+    sel.innerHTML = '';
+    for (const r of choices) {
+      const o = document.createElement('option');
+      o.value = r;
+      o.textContent = r ? '/' + r : '/ (the folder you opened)';
+      if (r === (site.webRoot || '')) o.selected = true;
+      sel.appendChild(o);
+    }
+    sel.onchange = () => window.Site.setWebRoot(sel.value);
+    sel.closest('.site-root-row').hidden = choices.length < 2;
+  }
+
   function renderPages() {
+    renderRoot();
     const list = document.getElementById('site-pages');
     const site = window.Site.active();
+    const root = site.webRoot || '';
     list.innerHTML = '';
     for (const p of window.Site.listPages()) {
       const item = document.createElement('div');
@@ -267,7 +286,7 @@ window.Assets = (function() {
       item.title = p === site.pagePath ? 'Open now' : 'Open ' + p;
       const name = document.createElement('span');
       name.className = 'site-page-name';
-      name.textContent = p;
+      name.textContent = p.slice(root.length);
       item.appendChild(name);
       if (p !== site.pagePath) item.addEventListener('click', () => window.Site.openPage(p));
       list.appendChild(item);

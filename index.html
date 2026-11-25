@@ -373,6 +373,10 @@
           </div>
           <div id="site-open" hidden>
             <h3 class="site-title"><i data-lucide="folder-tree"></i><span id="site-name"></span></h3>
+            <label class="site-root-row" title="The folder that “/” means on your live site. For a build output (Next.js out/, dist/, build/) pick that folder so /_next/… and /css/… links resolve.">
+              <span>Site root</span>
+              <select id="site-root"></select>
+            </label>
             <h4 class="site-sub">Pages</h4>
             <div id="site-pages" class="recent-list site-pages"></div>
             <h4 class="site-sub">Images <span id="site-image-count"></span></h4>

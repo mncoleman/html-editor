@@ -136,6 +136,7 @@ window.Site = (function() {
   }
 
   async function activate(next) {
+    next.webRoot = detectWebRoot(next);
     const pages = listPages(next);
     if (!pages.length) {
       toast(`No .html pages found in ${next.name}`, 'warn');
@@ -143,11 +144,12 @@ window.Site = (function() {
     }
     site = next;
     const swOk = await ensureController();
-    const start = pages.find(p => /^index\.html?$/i.test(p)) || pages[0];
+    const start = pages.find(p => p === next.webRoot + 'index.html' || p === next.webRoot + 'index.htm') || pages[0];
     await openPage(start, { skipConfirm: true });
     ES.emit('site-changed');
     showAssetsTab();
     if (!swOk) toast('This browser blocked the helper that loads linked CSS and images, so the page may look unstyled. Editing and saving still work.', 'warn');
+    else if (isBuildOutput()) toast(`${site.webRoot} looks like build output (there's a package.json here). Edits to it are fine for trying things out, but your next build will replace them. Make lasting changes in the source files.`, 'warn');
     else if (!site.writable) toast(`Opened ${site.name} read-only. Save downloads the page; new images are embedded in it.`, '');
     else toast(`Opened ${site.name}. Edits save to disk; new images are copied into the folder.`, 'success');
     return true;
@@ -234,12 +236,14 @@ window.Site = (function() {
 
   function listPages(s = site) {
     if (!s) return [];
-    return Array.from(s.entries.keys()).filter(p => PAGE_EXT.test(p))
+    const r = s.webRoot || '';
+    return Array.from(s.entries.keys()).filter(p => PAGE_EXT.test(p) && p.startsWith(r))
       .sort((a, b) => depth(a) - depth(b) || a.localeCompare(b));
   }
   function listImages(s = site) {
     if (!s) return [];
-    return Array.from(s.entries.keys()).filter(p => IMAGE_EXT.test(p)).sort((a, b) => a.localeCompare(b));
+    const r = s.webRoot || '';
+    return Array.from(s.entries.keys()).filter(p => IMAGE_EXT.test(p) && p.startsWith(r)).sort((a, b) => a.localeCompare(b));
   }
   function depth(p) { return p.split('/').length; }
 
@@ -294,9 +298,9 @@ window.Site = (function() {
       const rest = pathname.slice(PREFIX.length);
       const slash = rest.indexOf('/');
       if (rest.slice(0, slash < 0 ? undefined : slash) !== site.token) return { status: 404 };
-      sitePath = slash < 0 ? '' : rest.slice(slash + 1);
+      sitePath = encodePath(webRoot()) + (slash < 0 ? '' : rest.slice(slash + 1));
     } else {
-      sitePath = pathname.slice(1); // root-absolute "/x" = folder root
+      sitePath = encodePath(webRoot()) + pathname.slice(1); // root-absolute "/x" = site root
     }
     return serve(sitePath, false);
   }
@@ -305,7 +309,7 @@ window.Site = (function() {
     const d = e.data;
     if (!d || d.type !== 'he-site-fetch' || !d.token || !e.ports[0]) return;
     if (!site || d.token !== site.token) { e.ports[0].postMessage({ pass: true }); return; }
-    serve(d.sitePath || '', true).then(ans => e.ports[0].postMessage(ans), () => e.ports[0].postMessage({ status: 500 }));
+    serve(encodePath(webRoot()) + (d.sitePath || ''), true).then(ans => e.ports[0].postMessage(ans), () => e.ports[0].postMessage({ status: 500 }));
   }
 
   async function serve(rawPath, isPreview) {
@@ -367,7 +371,46 @@ window.Site = (function() {
     return site && site.baseDir != null ? site.baseDir : pageDir();
   }
   function encodePath(p) { return p.split('/').map(encodeURIComponent).join('/'); }
-  function virtualPageUrl() { return location.origin + PREFIX + site.token + '/' + encodePath(site.pagePath || ''); }
+
+  // The site root: the folder that "/" means on the live site. Usually the
+  // folder you opened, but for a build output (Next.js out/, dist/, build/,
+  // _site/) it's that subfolder, or "/_next/…" and "/css/…" won't resolve.
+  // The editor's virtual URL space (/__site__/<token>/…) mirrors this root.
+  function isBuildOutput() {
+    return !!site && /^(out|dist|build|_site|\.next|\.output)\/$/i.test(site.webRoot || '') && site.entries.has('package.json');
+  }
+  function webRoot() { return (site && site.webRoot) || ''; }
+  function toVirtual(p) { const r = webRoot(); return p.startsWith(r) ? p.slice(r.length) : p; }
+  function virtualPageUrl() { return location.origin + PREFIX + site.token + '/' + encodePath(toVirtual(site.pagePath || '')); }
+
+  const ROOT_GUESSES = ['out', 'dist', 'build', '_site', 'public', 'site', 'www', 'docs', 'html'];
+  function detectWebRoot(s) {
+    const pages = Array.from(s.entries.keys()).filter(p => PAGE_EXT.test(p));
+    if (pages.some(p => /^index\.html?$/i.test(p))) return '';
+    for (const c of ROOT_GUESSES) if (pages.some(p => p.toLowerCase() === c + '/index.html')) return c + '/';
+    const idx = pages.filter(p => /(^|\/)index\.html?$/i.test(p)).sort((a, b) => depth(a) - depth(b))[0];
+    return idx ? idx.replace(/[^/]*$/, '') : '';
+  }
+  // Folders that could be the site root: the opened folder plus every folder
+  // holding an index.html (shallowest first).
+  function rootChoices() {
+    if (!site) return [];
+    const dirs = new Set(['']);
+    Array.from(site.entries.keys()).filter(p => /(^|\/)index\.html?$/i.test(p))
+      .sort((a, b) => depth(a) - depth(b))
+      .forEach(p => { if (dirs.size < 20) dirs.add(p.replace(/[^/]*$/, '')); });
+    if (site.webRoot) dirs.add(site.webRoot);
+    return Array.from(dirs);
+  }
+  async function setWebRoot(root) {
+    if (!site || root === site.webRoot) return;
+    if (!(await confirmLeave('Change the site root?'))) { ES.emit('site-changed'); return; }
+    site.webRoot = root;
+    const pages = listPages();
+    const start = pages.find(p => p === root + 'index.html' || p === root + 'index.htm') || pages[0];
+    if (start) await openPage(start, { skipConfirm: true });
+    ES.emit('site-changed');
+  }
 
   // Insert our <base> so relative URLs on the canvas resolve into the folder.
   // A page's own relative <base href> is honored by resolving it first.
@@ -378,7 +421,7 @@ window.Site = (function() {
     const headPart = headEnd < 0 ? html : html.slice(0, headEnd);
     const own = /<base\b[^>]*?\bhref\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i.exec(headPart);
     const root = PREFIX + site.token + '/';
-    let href = location.origin + root + encodePath(pageDir());
+    let href = location.origin + root + encodePath(toVirtual(pageDir()));
     site.baseDir = null;
     if (own) {
       const val = (own[1] ?? own[2] ?? own[3] ?? '').trim();
@@ -390,8 +433,9 @@ window.Site = (function() {
         else if (u.pathname.startsWith(PREFIX)) dir = '';          // "../" climbed above the folder
         else dir = u.pathname.slice(1);                           // root-absolute, e.g. href="/"
         dir = dir.replace(/[^/]*$/, '');                          // directory part only
-        site.baseDir = dir.split('/').map(seg => { try { return decodeURIComponent(seg); } catch (_) { return seg; } }).join('/');
-        href = location.origin + root + encodePath(site.baseDir);
+        dir = dir.split('/').map(seg => { try { return decodeURIComponent(seg); } catch (_) { return seg; } }).join('/');
+        site.baseDir = webRoot() + dir;
+        href = location.origin + root + encodePath(dir);
       } catch (_) {}
     }
     const tag = `<base id="__he_base__" href="${href.replace(/"/g, '&quot;')}">`;
@@ -417,9 +461,9 @@ window.Site = (function() {
     url = url.trim();
     if (/^(data|blob|https?|mailto|tel|javascript):/i.test(url) || url.startsWith('//')) return null;
     try {
-      const u = new URL(url, 'https://site.invalid/' + encodePath(baseDir()));
+      const u = new URL(url, 'https://site.invalid/' + encodePath(toVirtual(baseDir())));
       if (u.host !== 'site.invalid') return null;
-      return u.pathname.slice(1).split('/').map(decodeURIComponent).join('/');
+      return webRoot() + u.pathname.slice(1).split('/').map(decodeURIComponent).join('/');
     } catch (_) { return null; }
   }
 
@@ -430,10 +474,12 @@ window.Site = (function() {
   // Folder to copy new images into: an existing image folder if there is one.
   function assetDir() {
     const cands = ['images', 'img', 'assets/images', 'assets/img', 'static/images', 'static/img', 'assets', 'media'];
+    const r = webRoot();
     for (const c of cands) {
-      for (const p of site.entries.keys()) if (p.toLowerCase().startsWith(c + '/')) return p.slice(0, c.length);
+      const want = (r + c + '/').toLowerCase();
+      for (const p of site.entries.keys()) if (p.toLowerCase().startsWith(want)) return p.slice(0, want.length - 1);
     }
-    return 'images';
+    return r + 'images';
   }
 
   // If the folder already holds this exact file (e.g. dragged in from the
@@ -552,7 +598,7 @@ window.Site = (function() {
   return {
     init, active, supportsDirPicker,
     openFolder, openFromHandle, openFromFileList, openFromEntry, openPage, detach, reopenLast, getLastFolder,
-    listPages, listImages, getFile, attachResponder, injectBase, checkFrame,
+    listPages, listImages, rootChoices, setWebRoot, webRoot, getFile, attachResponder, injectBase, checkFrame,
     relFromPage, resolveFromPage, previewUrl, ensureController,
     assetDir, findSame, writeNewFile, IMAGE_EXT,
   };
